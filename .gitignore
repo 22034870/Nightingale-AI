@@ -10,3 +10,5 @@ venv/
 .vercel
 .DS_Store
 Thumbs.db
+dev.log
+dev.err.log
