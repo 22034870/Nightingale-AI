@@ -151,8 +151,8 @@ export default function ChatClient({ opening }: { opening: string }) {
       <section className="flex min-h-0 flex-col rounded-xl border border-slate-200 bg-white">
         <header className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
           <div>
-            <h1 className="font-semibold">Nightingale</h1>
-            <p className="text-xs text-slate-500">
+            <h1 className="font-semibold text-slate-900">Nightingale</h1>
+            <p className="text-xs text-slate-600">
               Automated assistant · not a doctor · Harmoni Medical Centre
             </p>
           </div>
@@ -161,7 +161,7 @@ export default function ChatClient({ opening }: { opening: string }) {
               <p className="text-xs font-medium text-slate-700">
                 {history.progress.done} of {history.progress.total}
               </p>
-              <p className="text-[11px] text-slate-500">ready for the clinician</p>
+              <p className="text-[11px] text-slate-600">ready for the clinician</p>
             </div>
           )}
         </header>
@@ -190,7 +190,7 @@ export default function ChatClient({ opening }: { opening: string }) {
                 <p className="whitespace-pre-wrap">{m.text}</p>
 
                 {m.citations && m.citations.length > 0 && (
-                  <p className="mt-2 border-t border-slate-200 pt-1.5 text-[11px] text-slate-500">
+                  <p className="mt-2 border-t border-slate-200 pt-1.5 text-[11px] text-slate-600">
                     From{" "}
                     {[...new Set(m.citations.map((c) => c.documentTitle))].join(", ")}
                   </p>
@@ -198,7 +198,7 @@ export default function ChatClient({ opening }: { opening: string }) {
               </div>
             </div>
           ))}
-          {busy && <p className="text-xs text-slate-400">Working…</p>}
+          {busy && <p className="text-xs text-slate-500">Working…</p>}
           <div ref={endRef} />
         </div>
 
@@ -235,7 +235,7 @@ export default function ChatClient({ opening }: { opening: string }) {
               disabled={busy}
               aria-label="Your message"
               autoComplete="off"
-              className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-600"
+              className="flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-teal-600"
             />
             <button
               type="submit"
@@ -247,7 +247,7 @@ export default function ChatClient({ opening }: { opening: string }) {
           </form>
 
           {/* Persistent, never scrolled away. Required by the brief. */}
-          <p className="mt-2 text-center text-[11px] text-slate-500">
+          <p className="mt-2 text-center text-[11px] text-slate-600">
             {banner ?? "If this is an emergency, exit Nightingale and dial 999 for Emergency Services."}
           </p>
         </div>
@@ -255,8 +255,8 @@ export default function ChatClient({ opening }: { opening: string }) {
 
       {/* ---- Live profile ---- */}
       <aside className="rounded-xl border border-slate-200 bg-white p-4 text-sm">
-        <h2 className="font-semibold">What the clinician will see</h2>
-        <p className="mt-0.5 text-xs text-slate-500">
+        <h2 className="font-semibold text-slate-900">What the clinician will see</h2>
+        <p className="mt-0.5 text-xs text-slate-600">
           Updates as we talk. Nothing is sent until you choose to send it.
         </p>
 
@@ -271,7 +271,7 @@ export default function ChatClient({ opening }: { opening: string }) {
           {profile.chief_complaint ? (
             <p>{profile.chief_complaint}</p>
           ) : (
-            <p className="text-slate-400">Not yet</p>
+            <p className="text-slate-500">Not yet</p>
           )}
         </Section>
 
@@ -286,7 +286,7 @@ export default function ChatClient({ opening }: { opening: string }) {
               ))}
             </ul>
           ) : (
-            <p className="text-slate-400">Not yet</p>
+            <p className="text-slate-500">Not yet</p>
           )}
         </Section>
 
@@ -308,7 +308,7 @@ export default function ChatClient({ opening }: { opening: string }) {
               ))}
             </ul>
           ) : (
-            <p className="text-slate-400">Not yet</p>
+            <p className="text-slate-500">Not yet</p>
           )}
         </Section>
 
@@ -316,7 +316,7 @@ export default function ChatClient({ opening }: { opening: string }) {
           {profile.allergies.length ? (
             <ul>{profile.allergies.map((a, i) => <li key={i}>{a.value}</li>)}</ul>
           ) : (
-            <p className="text-slate-400">Not yet</p>
+            <p className="text-slate-500">Not yet</p>
           )}
         </Section>
 
@@ -344,7 +344,7 @@ export default function ChatClient({ opening }: { opening: string }) {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="mt-4 border-t border-slate-100 pt-3">
-      <h3 className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-500">
+      <h3 className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-600">
         {title}
       </h3>
       <div className="text-slate-900">{children}</div>

@@ -44,17 +44,17 @@ export default function Home() {
 
   return (
     <main className="mx-auto max-w-2xl px-6 py-14">
-      <h1 className="text-3xl font-semibold tracking-tight">Nightingale</h1>
+      <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Nightingale</h1>
       <p className="mt-3 text-slate-600">
         A first-touch-to-care system for {clinic.name}. Someone frightened by what
         they found online gets the quality of questioning a doctor would give
         them — and none of the conclusions only a doctor may draw.
       </p>
-      <p className="mt-2 text-sm text-slate-500">
+      <p className="mt-2 text-sm text-slate-600">
         Synthetic data only. Not a real clinic, and not medical advice.
       </p>
 
-      <h2 className="mt-10 text-sm font-medium uppercase tracking-wide text-slate-500">
+      <h2 className="mt-10 text-sm font-medium uppercase tracking-wide text-slate-600">
         Try it
       </h2>
       <ul className="mt-3 divide-y divide-slate-200 rounded-lg border border-slate-200">
@@ -74,7 +74,7 @@ export default function Home() {
         That reply never reaches a language model.
       </p>
 
-      <h2 className="mt-10 text-sm font-medium uppercase tracking-wide text-slate-500">
+      <h2 className="mt-10 text-sm font-medium uppercase tracking-wide text-slate-600">
         Loaded configuration
       </h2>
       <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
@@ -84,7 +84,7 @@ export default function Home() {
         <Stat label="Grounding chunks" value={`${getChunks().length}`} sub="citations resolve to character offsets" />
       </dl>
 
-      <p className="mt-8 text-sm text-slate-500">
+      <p className="mt-8 text-sm text-slate-600">
         Architecture, schema and the channel ethics matrix are in the Technical
         Brief; decisions and cuts are in PLANNING.md.
       </p>
@@ -95,9 +95,9 @@ export default function Home() {
 function Stat({ label, value, sub }: { label: string; value: string; sub: string }) {
   return (
     <div className="rounded-lg border border-slate-200 px-3 py-2.5">
-      <dt className="text-xs text-slate-500">{label}</dt>
-      <dd className="text-xl font-semibold">{value}</dd>
-      <dd className="text-xs text-slate-500">{sub}</dd>
+      <dt className="text-xs text-slate-600">{label}</dt>
+      <dd className="text-xl font-semibold text-slate-900">{value}</dd>
+      <dd className="text-xs text-slate-600">{sub}</dd>
     </div>
   );
 }

@@ -1,26 +1,72 @@
 @import "tailwindcss";
 
+/*
+ * COMMITTED TO A LIGHT SURFACE, DELIBERATELY.
+ *
+ * The create-next-app default flipped --foreground to #ededed under
+ * prefers-color-scheme: dark while this app paints its cards white, so every
+ * element that inherited its colour rendered near-white on white. Headings
+ * vanished, typed text was unreadable.
+ *
+ * Two ways out: support both themes properly, or commit to one. For a clinical
+ * surface, committing is the better answer:
+ *
+ *   - a half-styled dark mode is worse than none, and this is a product where
+ *     someone frightened needs to be able to READ it
+ *   - the demo recording and a reviewer's screen render identically regardless
+ *     of their OS setting
+ *   - `color-scheme: light` also forces form controls light, so the composer
+ *     text stays legible instead of inheriting a dark-mode input style
+ *
+ * Every colour below is explicit. Nothing inherits.
+ */
+
 :root {
+  color-scheme: light;
   --background: #ffffff;
-  --foreground: #171717;
+  --foreground: #0f172a; /* slate-900 */
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  background: var(--background);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/*
+ * Form controls take their colour from the user agent rather than from body, so
+ * a dark-mode browser will style them itself unless told otherwise.
+ *
+ * @layer base is load-bearing here, not decoration. Unlayered CSS beats ALL
+ * layered CSS in the cascade regardless of specificity, so writing these as
+ * bare selectors silently overrode every Tailwind utility on a form control —
+ * `button { color: inherit }` defeated `.text-white`, and the Send button
+ * rendered as a dark rectangle with an invisible label. Inside the base layer
+ * these are defaults that utilities can override, which is what they should be.
+ */
+@layer base {
+  input,
+  textarea,
+  select,
+  button {
+    color: inherit;
+    font: inherit;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: #64748b; /* slate-500 — 4.76:1 on white, passes WCAG AA */
+    opacity: 1; /* Firefox dims placeholders by default */
+  }
 }
