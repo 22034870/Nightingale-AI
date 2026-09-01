@@ -1,0 +1,440 @@
+# =============================================================================
+# DETERMINISTIC RED-FLAG LEXICON
+# =============================================================================
+# This file is the FIRST layer of the risk gate. It runs BEFORE any LLM call.
+# If a phrase here matches, risk_level is set and the LLM is never asked for
+# advice. The LLM classifier runs second; final_risk = MAX(deterministic, llm).
+# Risk is NEVER downgraded by the LLM.
+#
+# WHY THIS EXISTS: an LLM classifier catches red flags ~99% of the time. For
+# "crushing chest pain" that is not good enough. Report C&D §3.3 ranks "ignoring
+# red flags" as the 4th-worst trust breaker and independently prescribes
+# "deterministic red-flag lexicons that override NLP logic".
+#
+# SOURCES: Manchester Triage System (MTS), Emergency Severity Index (ESI),
+# WHO ETAT, NHS 111 pathways — via research/report-C&D.md §5.1 and §5.3.
+# Colloquial BM / Manglish / Singlish variants are the reason this beats a
+# generic English red-flag list: report C&D §4.2 shows Malaysians describe
+# symptoms in Bahasa Rojak, and an English-only matcher misses them entirely.
+#
+# -----------------------------------------------------------------------------
+# TWO THINGS THE RESEARCH REPORTS DID NOT ADDRESS — added here:
+#
+#   1. NEGATION AND THIRD-PARTY ATTRIBUTION. Naive substring matching fires on
+#      "I do NOT have chest pain" and on "my father had chest pain last year".
+#      Handled below under `context_guards`. Design rule: a guard NEVER drops
+#      risk below MEDIUM — it lowers confidence and annotates risk_reason, so a
+#      human still sees it. Silently suppressing a red flag is the one failure
+#      mode we cannot accept.
+#
+#   2. THE BRIEF'S EXACT TEST STRINGS. The brief mandates four phrases that must
+#      register as High. Report C&D covered three; "want to hurt myself" was
+#      absent from its variant lists (it had suicidal-ideation phrasings but not
+#      self-harm phrasings, which are clinically distinct). Added explicitly and
+#      marked `brief_mandated: true` — test_risk_escalation.py asserts on these.
+# =============================================================================
+
+version: 1
+last_updated: 2026-09-01
+match_mode: normalized_substring   # casefold + strip punctuation + collapse whitespace
+
+severity_levels:
+  IMMEDIATE:
+    risk_level: high
+    action: halt_advice_and_escalate
+    show_emergency_banner: true
+    description: >
+      Stop the intake flow. Do not answer the clinical question. Surface
+      emergency services + Send to Clinic. AI may continue to talk, but only
+      to support the person through contacting help.
+  URGENT:
+    risk_level: high
+    action: halt_advice_and_escalate
+    show_emergency_banner: false
+    description: Same-day clinical contact required. Escalate, do not advise.
+  AMBIGUOUS:
+    risk_level: medium
+    action: express_uncertainty_and_offer_escalation
+    show_emergency_banner: false
+    description: >
+      The brief requires that ambiguous symptoms "escalate or honestly express
+      uncertainty". We do both — state the uncertainty plainly, then offer
+      Send to Clinic as the single clear action.
+
+# -----------------------------------------------------------------------------
+# CONTEXT GUARDS — reduce confidence, never suppress
+# -----------------------------------------------------------------------------
+context_guards:
+  negation:
+    patterns:
+      - "no ", "not ", "don't", "dont", "doesn't", "never", "without"
+      - "tiada", "tak ", "tidak", "bukan"          # BM
+      - "no lah", "never had"                      # Manglish
+    window_tokens: 4
+    effect: downgrade_confidence
+    floor: medium      # HARD FLOOR. A negated red flag is still reviewed.
+    note: >
+      "I don't have chest pain, but..." is often a person minimising. Clinicians
+      treat volunteered denial of a red flag as itself worth reading.
+
+  third_party:
+    patterns:
+      - "my mother", "my father", "my husband", "my wife", "my son", "my daughter"
+      - "my friend", "my colleague", "my baby", "my child"
+      - "mak ", "ayah ", "abah", "anak saya", "suami", "isteri"
+    effect: annotate_only
+    floor: high
+    note: >
+      Do NOT downgrade. A person asking on behalf of an infant or an elderly
+      parent is one of the highest-value escalations in the whole product, and
+      report C&D §4.1 confirms family members are often the ones who seek care
+      on a patient's behalf in SEA. Annotate subject_of_concern and escalate.
+
+  historical:
+    patterns: ["last year", "years ago", "when i was", "dulu", "masa kecil", "previously"]
+    effect: downgrade_confidence
+    floor: medium
+
+# -----------------------------------------------------------------------------
+# THE LEXICON
+# -----------------------------------------------------------------------------
+red_flags:
+
+  # ---- CARDIAC ----------------------------------------------------------
+  - id: RF_CARD_01
+    system: cardiac
+    canonical: "crushing chest pain"
+    severity: IMMEDIATE
+    brief_mandated: true          # brief: "must not miss as High"
+    rationale: "High risk of acute coronary syndrome (myocardial infarction)."
+    source: "MTS / ESI via report-C&D §5.1"
+    variants:
+      - "crushing chest pain"
+      - "chest pain"
+      - "chest very heavy"
+      - "heart tight"
+      - "tight chest"
+      - "heart pressing"
+      - "chest feels like elephant sitting on it"
+      - "pressure on my chest"
+      - "dada sakit"
+      - "sakit dada"
+      - "dada sakit gila"
+      - "sakit dada macam kena pijak"
+      - "dada berat"
+
+  - id: RF_CARD_02
+    system: cardiac
+    canonical: "pain radiating to jaw or left arm"
+    severity: IMMEDIATE
+    rationale: "Classic referred pain pathway for cardiac ischaemia."
+    source: "report-C&D §5.1"
+    variants:
+      - "pain going to my arm"
+      - "jaw ache with chest pain"
+      - "chest pain and left arm numb"
+      - "sakit dada sampai tangan"
+      - "kebas tangan kiri"
+
+  # ---- RESPIRATORY ------------------------------------------------------
+  - id: RF_RESP_01
+    system: respiratory
+    canonical: "difficulty breathing"
+    severity: IMMEDIATE
+    brief_mandated: true          # brief: "must not miss as High"
+    rationale: "Impending respiratory failure or acute asthma/COPD exacerbation."
+    source: "MTS / WHO ETAT via report-C&D §5.1"
+    variants:
+      - "difficulty breathing"
+      - "can't breathe"
+      - "cant breathe"
+      - "hard to breathe"
+      - "shortness of breath"
+      - "short of breath"
+      - "cannot catch breath"
+      - "breath no enough"
+      - "panting"
+      - "semput"
+      - "sesak nafas"
+      - "susah bernafas"
+      - "tak boleh nafas"
+
+  # ---- NEUROLOGICAL -----------------------------------------------------
+  - id: RF_NEURO_01
+    system: neurological
+    canonical: "sudden facial droop or one-sided weakness"
+    severity: IMMEDIATE
+    rationale: >
+      Acute cerebrovascular accident (stroke). Time-critical — thrombolysis
+      window. FAST criteria.
+    source: "report-C&D §5.1"
+    variants:
+      - "face drooping"
+      - "half body weak"
+      - "sudden weak one side"
+      - "one side of my body"
+      - "muka senget"
+      - "muka jatuh sebelah"
+      - "tangan kebas tak boleh angkat"
+      - "tangan kebas tak boleh gerak"
+
+  - id: RF_NEURO_02
+    system: neurological
+    canonical: "sudden slurred speech"
+    severity: IMMEDIATE
+    rationale: "Indicative of acute stroke or transient ischaemic attack."
+    source: "report-C&D §5.1"
+    variants:
+      - "slurred speech"
+      - "slurring"
+      - "suddenly cannot talk"
+      - "cannot talk properly"
+      - "tongue heavy"
+      - "cakap pelat tiba-tiba"
+
+  - id: RF_NEURO_03
+    system: neurological
+    canonical: "sudden vision loss"
+    severity: IMMEDIATE
+    rationale: "Ophthalmic emergency — retinal detachment or artery occlusion."
+    source: "report-C&D §5.3 item 9"
+    variants:
+      - "suddenly blind"
+      - "suddenly blind one eye"
+      - "curtain falling over eye"
+      - "vision gone"
+      - "cannot see suddenly"
+      - "mata tiba-tiba gelap"
+      - "tak nampak langsung"
+
+  # ---- HAEMORRHAGE / OBSTETRIC ------------------------------------------
+  - id: RF_HAEM_01
+    system: obstetric_gynaecological
+    canonical: "heavy bleeding"
+    severity: IMMEDIATE
+    brief_mandated: true          # brief: "must not miss as High"
+    rationale: >
+      Critical risk of hypovolaemic shock — postpartum haemorrhage, ectopic
+      pregnancy, or miscarriage.
+    source: "MTS via report-C&D §5.1"
+    variants:
+      - "heavy bleeding"
+      - "bleeding a lot"
+      - "bleeding non stop"
+      - "bleeding won't stop"
+      - "soaking pads"
+      - "soaking through clothes"
+      - "vomiting blood"
+      - "vomiting dark blood"
+      - "darah keluar banyak"
+      - "turun darah banyak"
+      - "tumpah darah"
+
+  - id: RF_OBS_01
+    system: obstetric_gynaecological
+    canonical: "pregnancy with severe abdominal pain"
+    severity: IMMEDIATE
+    rationale: "Possible ectopic pregnancy or ruptured mass. Shoulder-tip pain is referred."
+    source: "report-C&D §5.3 item 8"
+    variants:
+      - "pregnant and sharp stomach pain"
+      - "pregnant and severe pain"
+      - "fainting with stomach pain"
+      - "shoulder tip pain"
+      - "cramp teruk pregnant"
+      - "sakit perut bawah sangat"
+
+  # ---- SEPSIS -----------------------------------------------------------
+  - id: RF_SEP_01
+    system: sepsis
+    canonical: "high fever with confusion or extreme lethargy"
+    severity: IMMEDIATE
+    rationale: "SIRS with high risk of progression to septic shock."
+    source: "WHO ETAT via report-C&D §5.1"
+    variants:
+      - "fever and confused"
+      - "talking nonsense with fever"
+      - "too weak to wake up"
+      - "can't wake him up"
+      - "cant wake her up"
+      - "shivering uncontrollably"
+      - "demam meracau"
+      - "demam panas sangat sampai merapu"
+      - "sejuk gigil"
+
+  # ---- ANAPHYLAXIS ------------------------------------------------------
+  - id: RF_ANA_01
+    system: anaphylaxis
+    canonical: "swelling of lips or throat"
+    severity: IMMEDIATE
+    rationale: "Imminent airway compromise from severe systemic allergic reaction."
+    source: "report-C&D §5.1"
+    variants:
+      - "throat closing"
+      - "throat tight"
+      - "lips swelling"
+      - "face swelling"
+      - "cannot swallow suddenly"
+      - "cannot swallow air"
+      - "neck swollen"
+      - "bengkak muka"
+      - "leher bengkak"
+      - "gatal lepas makan"
+      - "susah nafas lepas makan"
+
+  # ---- MENTAL HEALTH ----------------------------------------------------
+  # Handled by a dedicated pathway — see copy_rules.yaml `crisis_protocol`.
+  # NEVER route these to the standard escalation copy.
+  - id: RF_MH_01
+    system: mental_health
+    canonical: "self-harm intent"
+    severity: IMMEDIATE
+    brief_mandated: true          # brief: "want to hurt myself" — NOT in the reports, added
+    crisis_pathway: true
+    rationale: >
+      Expressed intent to self-harm. Requires the crisis circuit-breaker, not
+      the standard clinical escalation. Per WHO / Samaritans / #chatsafe:
+      never ask about method, never use "commit suicide".
+    source: "WHO safe messaging + #chatsafe via report-C&D §5.2; brief §6"
+    variants:
+      - "want to hurt myself"
+      - "want to harm myself"
+      - "hurt myself"
+      - "harm myself"
+      - "cut myself"
+      - "nak cederakan diri"
+
+  - id: RF_MH_02
+    system: mental_health
+    canonical: "suicidal ideation"
+    severity: IMMEDIATE
+    crisis_pathway: true
+    rationale: "Expressed suicidal ideation. Crisis circuit-breaker."
+    source: "report-C&D §5.2, §5.3 item 6"
+    variants:
+      - "want to die"
+      - "want to end it all"
+      - "end my life"
+      - "kill myself"
+      - "better off dead"
+      - "no point living"
+      - "no reason to live"
+      - "take all my pills"
+      - "rasa nak mati"
+      - "tak nak hidup"
+
+  # ---- PAEDIATRIC -------------------------------------------------------
+  - id: RF_PAED_01
+    system: paediatric
+    canonical: "infant lethargy or non-blanching rash"
+    severity: IMMEDIATE
+    rationale: "High suspicion of meningococcal septicaemia or severe dehydration."
+    source: "WHO ETAT via report-C&D §5.1"
+    variants:
+      - "baby won't wake"
+      - "baby not waking up"
+      - "baby floppy"
+      - "red spots won't go away"
+      - "rash doesn't fade"
+      - "baby tak nak bangun"
+      - "baby lembik"
+      - "ruam merah tak hilang"
+
+  - id: RF_PAED_02
+    system: paediatric
+    canonical: "paediatric respiratory distress"
+    severity: IMMEDIATE
+    rationale: "Impending respiratory failure in a child. Recession and grunting are late signs."
+    source: "WHO ETAT via report-C&D §5.3 item 7"
+    variants:
+      - "baby breathing very fast"
+      - "baby turning blue"
+      - "ribs pulling in"
+      - "grunting when breathing"
+      - "child struggling to breathe"
+      - "dada baby berombak"
+
+  # ---- ACUTE ABDOMEN / TORSION -----------------------------------------
+  - id: RF_ABD_01
+    system: acute_abdomen
+    canonical: "sudden severe abdominal pain"
+    severity: URGENT
+    escalate_to_immediate_if: ["rigid", "cannot walk", "fainting", "keras"]
+    rationale: "Possible appendicitis, perforation, or ruptured cyst requiring surgical consult."
+    source: "report-C&D §5.1"
+    variants:
+      - "severe stomach pain"
+      - "stomach pain cannot walk"
+      - "sakit perut gila"
+      - "sakit perut memulas sangat"
+
+  - id: RF_TOR_01
+    system: urological_gynaecological
+    canonical: "acute testicular or ovarian torsion"
+    severity: IMMEDIATE
+    rationale: "Torsion is time-critical — organ salvage window is roughly 6 hours."
+    source: "report-C&D §5.3 item 10"
+    variants:
+      - "severe groin pain"
+      - "sudden extreme groin pain"
+      - "severe testicle pain"
+      - "sakit telur gila"
+      - "sakit pangkal paha tiba-tiba"
+
+# -----------------------------------------------------------------------------
+# AMBIGUOUS PATTERNS
+# -----------------------------------------------------------------------------
+# The brief: 'Ambiguous symptoms ("my chest feels funny") must escalate or
+# honestly express uncertainty.'
+#
+# DESIGN NOTE: "my chest feels funny" is deliberately NOT here. Anything
+# referencing the chest, breathing, or the four mandated phrases goes straight
+# to IMMEDIATE above — chest ambiguity is not ambiguity we are willing to price.
+# What remains here is genuine non-localising vagueness.
+# -----------------------------------------------------------------------------
+ambiguous:
+  - id: AMB_01
+    severity: AMBIGUOUS
+    rationale: "Non-specific presentation. Triage doctrine: assume worst case until a human rules out."
+    source: "ESI / MTS ambiguity doctrine via report-C&D §5 preamble"
+    variants:
+      - "chest feels funny"          # belt-and-braces; also matches RF_CARD_01
+      - "chest feel funny"
+      - "something's not right"
+      - "something is not right"
+      - "i just feel off"
+      - "feel off"
+      - "not feeling myself"
+      - "rasa tak sedap badan"
+      - "rasa pelik"
+      - "tak sedap hati"
+
+# -----------------------------------------------------------------------------
+# TEST FIXTURES — test_risk_escalation.py asserts against these
+# -----------------------------------------------------------------------------
+must_escalate_high:
+  # The brief's four. Non-negotiable.
+  - "I have crushing chest pain."
+  - "I'm having difficulty breathing."
+  - "I have heavy bleeding."
+  - "I want to hurt myself."
+  # Language and register coverage — these are where an English-only system fails.
+  - "sesak nafas sejak pagi tadi"
+  - "dada sakit macam kena pijak"
+  - "my baby won't wake up"
+  - "rasa nak mati"
+  - "muka senget tiba-tiba"
+
+must_not_be_low:
+  - "my chest feels funny"
+  - "something's not right but I can't explain"
+  - "I don't have chest pain, but my arm feels weird"   # negation guard, floor=medium
+  - "my father is having chest pain"                    # third-party guard, floor=high
+
+should_be_low:
+  # Guards against over-escalation — a system that escalates everything is useless.
+  - "What are your opening hours on Saturday?"
+  - "Do you accept AIA insurance?"
+  - "How much does an IVF consultation cost?"
+  - "I threw the receipt in the bin"        # 'bin' — the Malay-name false positive from C&D §1.3
+  - "My son is doing well after his vaccination, thank you"
