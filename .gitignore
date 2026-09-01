@@ -12,3 +12,4 @@ venv/
 Thumbs.db
 dev.log
 dev.err.log
+*.tsbuildinfo
