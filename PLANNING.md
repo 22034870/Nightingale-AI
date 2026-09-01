@@ -330,11 +330,19 @@ plus `deciding_layer` (deterministic | llm | merged), `matched_rule_id`, `model_
 
 ### 6d. The ambiguity doctrine
 
-**My rule:** `Anything referencing the chest, breathing, or the four brief-mandated phrases goes
-straight to HIGH — chest ambiguity is not ambiguity I am willing to price. Genuine non-localising
-vagueness ("something's not right", "I just feel off") lands in an AMBIGUOUS tier that resolves
-to risk=MEDIUM and does BOTH of what the brief allows: it states the uncertainty plainly and it
-offers the handoff. It never guesses, and it never reassures.`
+**My rule:** `Named red-flag phrases — including all four the brief mandates — resolve to HIGH,
+which fires the emergency-services banner. Genuinely non-localising vagueness ("my chest feels
+funny", "something's not right", "I just feel off") resolves to MEDIUM via the AMBIGUOUS tier.
+MEDIUM already stops advice and triggers Send to Clinic under the brief's own rules, so the
+person is still escalated — they are just not told to dial 999.`
+
+**Why MEDIUM and not HIGH for "my chest feels funny":** an earlier draft of this section sent
+every chest mention straight to HIGH. Testing the lexicon showed why that is wrong. HIGH fires
+the emergency banner, and telling someone whose chest "feels funny" to exit and dial 999 is both
+clinically disproportionate and actively harmful to the banner itself — **a warning that fires
+on everything is a warning people learn to scroll past.** The banner has to stay expensive to
+stay useful. MEDIUM does everything the brief asks of the ambiguous case (stop advice, express
+uncertainty, offer the handoff) while keeping 999 reserved for what actually warrants it.
 
 **The exact copy shown:**
 > "I'm not able to tell from what you've described whether this is something that needs

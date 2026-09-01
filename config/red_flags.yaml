@@ -67,9 +67,22 @@ severity_levels:
 context_guards:
   negation:
     patterns:
-      - "no ", "not ", "don't", "dont", "doesn't", "never", "without"
-      - "tiada", "tak ", "tidak", "bukan"          # BM
-      - "no lah", "never had"                      # Manglish
+      # English
+      - "no "
+      - "not "
+      - "don't"
+      - "dont"
+      - "doesn't"
+      - "never"
+      - "without"
+      # Bahasa Malaysia
+      - "tiada"
+      - "tak "
+      - "tidak"
+      - "bukan"
+      # Manglish
+      - "no lah"
+      - "never had"
     window_tokens: 4
     effect: downgrade_confidence
     floor: medium      # HARD FLOOR. A negated red flag is still reviewed.
@@ -79,9 +92,24 @@ context_guards:
 
   third_party:
     patterns:
-      - "my mother", "my father", "my husband", "my wife", "my son", "my daughter"
-      - "my friend", "my colleague", "my baby", "my child"
-      - "mak ", "ayah ", "abah", "anak saya", "suami", "isteri"
+      # English
+      - "my mother"
+      - "my father"
+      - "my husband"
+      - "my wife"
+      - "my son"
+      - "my daughter"
+      - "my friend"
+      - "my colleague"
+      - "my baby"
+      - "my child"
+      # Bahasa Malaysia
+      - "mak "
+      - "ayah "
+      - "abah"
+      - "anak saya"
+      - "suami"
+      - "isteri"
     effect: annotate_only
     floor: high
     note: >
