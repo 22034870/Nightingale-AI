@@ -363,6 +363,18 @@ red_flags:
       - "take all my pills"
       - "rasa nak mati"
       - "tak nak hidup"
+      # Added after live testing: the two-layer merge caught "feeling more and
+      # more hopeless and dont see the point" only because the model was up.
+      # Phrasings this explicit must not depend on a network call.
+      - "don't see the point"
+      - "dont see the point"
+      - "no point in living"
+      - "no point in going on"
+      - "can't go on"
+      - "cant go on"
+      - "cannot go on"
+      - "give up on life"
+      - "putus asa"
 
   # ---- PAEDIATRIC -------------------------------------------------------
   - id: RF_PAED_01
@@ -560,6 +572,27 @@ clinical_signal:
     - doktor
     - mengandung
     - hamil
+    # Mental health. Deliberately NOT red flags - "this traffic is hopeless"
+    # must not escalate - but they carry enough signal that a classifier
+    # outage should fail closed to medium rather than hold at low.
+    - hopeless
+    - depressed
+    - depression
+    - anxious
+    - anxiety
+    - suicidal
+    - self harm
+    - worthless
+    - overwhelmed
+    - panic
+    - cannot cope
+    - cant cope
+    - breaking down
+    - mental health
+    - putus asa
+    - tertekan
+    - murung
+    - keliru
   note: >
     Matched as normalised substrings, same as the red-flag index. A hit does
     NOT raise risk on its own — it only permits the fail-closed floor to apply

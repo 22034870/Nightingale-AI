@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { classifyDeterministic, mergeVerdicts, requiresEscalation, auditRisk } from "@/lib/risk/gate";
+import { tryClassify } from "@/lib/risk/classifier";
 
 /**
  * Risk-gate inspection endpoint.
@@ -31,9 +32,15 @@ export async function POST(request: Request) {
 
   const deterministic = classifyDeterministic(body.text);
 
-  // The LLM layer lands in block D. Until then every call takes the
-  // fail-closed path, which is the correct default for an absent classifier.
-  const merged = mergeVerdicts(deterministic, null, body.text);
+  // Pass include_llm:false to exercise the fail-closed path on demand — the
+  // behaviour under a classifier outage should be testable without waiting for
+  // one. Default is to consult the model.
+  const useLlm = body.include_llm !== false;
+  const { verdict: llm, failure } = useLlm
+    ? await tryClassify(body.text)
+    : { verdict: null, failure: "skipped by request" };
+
+  const merged = mergeVerdicts(deterministic, llm, body.text);
 
   return NextResponse.json({
     risk_level: merged.riskLevel,
@@ -49,6 +56,10 @@ export async function POST(request: Request) {
     guards_applied: merged.guardsApplied,
     // What would be written to audit_log — PHI-free by construction.
     audit: auditRisk(merged),
+    llm_layer: llm
+      ? { risk_level: llm.riskLevel, risk_reason: llm.riskReason, confidence: llm.confidence, audit: llm.audit }
+      : { unavailable: failure },
+    layers_disagreed: merged.layersDisagreed,
     deterministic_only: {
       risk_level: deterministic.riskLevel,
       matched_rule_id: deterministic.matchedRuleId,
