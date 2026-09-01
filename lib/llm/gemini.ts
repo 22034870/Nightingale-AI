@@ -20,7 +20,7 @@ const ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models";
 export class LlmUnavailable extends Error {
   constructor(
     message: string,
-    readonly reason: "timeout" | "http" | "malformed" | "no_key",
+    readonly reason: "timeout" | "http" | "malformed" | "no_key" | "quota",
     readonly status?: number,
   ) {
     super(message);
@@ -100,9 +100,12 @@ export async function generate(opts: GenerateOptions): Promise<GenerateResult> {
 
     if (!res.ok) {
       const detail = await res.text().catch(() => "");
+      // 429 is its own category. An outage means something is broken; a quota
+      // breach means the account is out of budget, and the two need completely
+      // different responses from whoever is on call.
       throw new LlmUnavailable(
         `Gemini returned ${res.status}: ${detail.slice(0, 200)}`,
-        "http",
+        res.status === 429 ? "quota" : "http",
         res.status,
       );
     }

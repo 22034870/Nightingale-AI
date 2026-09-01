@@ -1,0 +1,210 @@
+# =============================================================================
+# THE HISTORY ENGINE — bounded clinical checklists
+# =============================================================================
+# Jason's §1(e): "ask the additional confirmation questions a doctor would need,
+# so the information is better and more accurate than the patient realises they
+# should give."
+#
+# THE CENTRAL CLAIM: asking is not diagnosing.
+#
+# "Does the pain spread to your arm?" gathers a fact. "That suggests cardiac
+# ischaemia" draws a conclusion. This engine only ever does the first. The
+# clinician does the second, which is exactly where the law puts it — so the
+# system can be genuinely useful without ever crossing the line the Medical Act
+# 1971 draws.
+#
+# WHY IT EARNS ITS PLACE, four ways at once:
+#   1. Non-diagnostic by construction.
+#   2. It IS the value event — most people do not know that "when did it start"
+#      and "what makes it worse" are the questions that matter.
+#   3. It makes the escalation payload genuinely good. The brief demands "the
+#      record must let a clinician begin a structured review without the patient
+#      repeating their story". A chat transcript does not do that. This does.
+#   4. It gives the person a reason to keep typing: bounded progress toward
+#      something they want, rather than open-ended interrogation.
+#
+# EVERY FIELD CARRIES A `why`. That is what converts intake into value. The
+# assistant states it when asking, so a question never feels like a form.
+#
+# HARD RULE: the engine STOPS on high risk. Someone with crushing chest pain is
+# not asked seven questions — they get the emergency line and the handoff, and
+# whatever partial history exists travels with them.
+#
+# Frames are the standard ones clinicians actually use (SOCRATES for pain), cut
+# to the fields that survive a text conversation with a frightened stranger.
+# =============================================================================
+
+version: 1
+
+settings:
+  # Below this, offer the handoff — enough for a clinician to start.
+  value_event_threshold: 60
+  # Never ask more than this many in one session. PLANNING §18 risk register:
+  # if it reads as an interrogation, cut to 4.
+  max_questions: 7
+  halt_on_risk: [high]
+
+# Detection is deliberately dumb and deterministic — no model call to decide
+# which checklist to use. Matched as normalised substrings against the message.
+complaint_types:
+
+  pain:
+    label: "Pain"
+    detect: [pain, ache, aching, sore, hurts, hurting, sakit, pedih, ngilu]
+    frame: "SOCRATES (site, onset, character, radiation, timing, modifying factors, severity)"
+    fields:
+      - id: site
+        label: "Where it is"
+        question: "Whereabouts is it, exactly?"
+        why: "The location narrows things down more than almost anything else."
+      - id: onset
+        label: "When it started"
+        question: "When did it start, and did it come on suddenly or build up?"
+        why: "Sudden versus gradual is usually the first thing a doctor asks."
+      - id: character
+        label: "What it feels like"
+        question: "How would you describe it — sharp, dull, burning, crushing, something else?"
+        why: "The kind of pain tells a clinician a lot that the location alone doesn't."
+      - id: radiation
+        label: "Whether it spreads"
+        question: "Does it stay in one place, or does it spread anywhere?"
+        why: "Whether pain travels is a detail people often don't think to mention."
+      - id: timing
+        label: "Pattern over time"
+        question: "Is it there all the time, or does it come and go?"
+        why: "Constant and intermittent point in quite different directions."
+      - id: modifying
+        label: "What changes it"
+        question: "Is there anything that makes it better or worse?"
+        why: "What relieves it is often the most useful single answer you can give."
+      - id: severity
+        label: "How bad"
+        question: "If you had to put it from 1 to 10, where is it right now?"
+        why: "Gives the clinician a baseline to compare against when you're seen."
+
+  bleeding:
+    label: "Bleeding"
+    detect: [bleeding, blood, bleed, darah, berdarah, spotting]
+    frame: "Volume, duration, source, associated symptoms"
+    fields:
+      - id: site
+        label: "Where from"
+        question: "Where is the bleeding coming from?"
+        why: "This changes who you need to see and how quickly."
+      - id: onset
+        label: "When it started"
+        question: "When did it start?"
+        why: "Duration matters as much as amount."
+      - id: volume
+        label: "How much"
+        question: "Roughly how much — spotting, or soaking through pads or clothing?"
+        why: "It's the single most important detail for judging urgency."
+      - id: associated
+        label: "Other symptoms"
+        question: "Any dizziness, faintness or pain alongside it?"
+        why: "These change how urgently you need to be seen."
+      - id: pregnancy
+        label: "Pregnancy status"
+        question: "Is there any chance you might be pregnant?"
+        why: "It changes the assessment completely, so clinicians always ask."
+
+  breathing:
+    label: "Breathing"
+    detect: [breath, breathing, wheeze, nafas, sesak, semput]
+    frame: "Onset, exertion, positional, associated"
+    fields:
+      - id: onset
+        label: "When it started"
+        question: "When did the breathlessness start?"
+        why: "Sudden onset is treated very differently from gradual."
+      - id: exertion
+        label: "At rest or on exertion"
+        question: "Is it there when you're resting, or only when you move around?"
+        why: "One of the clearest signals of how significant this is."
+      - id: positional
+        label: "Position"
+        question: "Is it worse lying down?"
+        why: "A specific detail clinicians look for that people rarely volunteer."
+      - id: associated
+        label: "Other symptoms"
+        question: "Any chest discomfort, cough or swelling in your legs?"
+        why: "These travel together and the combination matters."
+
+  fever:
+    label: "Fever"
+    detect: [fever, temperature, demam, panas, chills, menggigil]
+    frame: "Duration, height, associated, red flags"
+    fields:
+      - id: duration
+        label: "How long"
+        question: "How many days has the fever been going?"
+        why: "Duration is the main thing that decides whether you need to be seen."
+      - id: height
+        label: "How high"
+        question: "Have you measured it? If so, what was the highest reading?"
+        why: "A measured number is far more useful than 'quite hot'."
+      - id: associated
+        label: "Other symptoms"
+        question: "What else has come with it — cough, rash, vomiting, anything?"
+        why: "The combination points the clinician in the right direction."
+      - id: intake
+        label: "Eating and drinking"
+        question: "Are you managing to keep fluids down?"
+        why: "Dehydration is what usually turns a manageable fever into a visit."
+
+  mental_health:
+    label: "Mental health"
+    detect: [anxious, anxiety, depressed, depression, stress, panic, tertekan, murung, sedih]
+    frame: "Duration, function, support, safety"
+    # NOTE: safety screening is NOT here. Anything touching self-harm is caught
+    # by the risk gate and routed to the crisis protocol, which halts intake
+    # entirely. This checklist only runs for non-crisis presentations, and it is
+    # deliberately short — a person in distress should not face a questionnaire.
+    fields:
+      - id: duration
+        label: "How long"
+        question: "How long have you been feeling this way?"
+        why: "It helps the team understand whether this is recent or long-running."
+      - id: function
+        label: "Effect on daily life"
+        question: "Is it affecting things like sleep, work or eating?"
+        why: "This is what clinicians use to judge what kind of support fits."
+      - id: support
+        label: "Support around you"
+        question: "Is there anyone around you who knows how you've been feeling?"
+        why: "Not to pry — it just changes what the team can suggest."
+
+  general:
+    label: "General"
+    detect: []   # fallback when nothing else matches
+    frame: "Open history"
+    fields:
+      - id: concern
+        label: "Main concern"
+        question: "What's the main thing you'd like the clinician to look at?"
+        why: "Putting it in your own words is the most useful thing in the record."
+      - id: onset
+        label: "When it started"
+        question: "When did you first notice it?"
+        why: "Almost always the first question you'll be asked."
+      - id: change
+        label: "Whether it's changing"
+        question: "Has it been getting better, worse, or staying about the same?"
+        why: "The direction of travel matters more than the starting point."
+      - id: tried
+        label: "What you've tried"
+        question: "Have you tried anything for it so far?"
+        why: "Including traditional or over-the-counter remedies — no judgement, it just matters for safety."
+
+# Asked once per session regardless of complaint type, because they change
+# clinical safety for any presentation. The brief requires medications and
+# allergies in the minimum extracted fact set.
+universal_fields:
+  - id: medications
+    label: "Current medications"
+    question: "Are you taking any medications at the moment, including anything over-the-counter or traditional?"
+    why: "Some things interact, so the team always needs to know."
+  - id: allergies
+    label: "Allergies"
+    question: "Any allergies we should know about?"
+    why: "Standard safety check before anyone prescribes anything."

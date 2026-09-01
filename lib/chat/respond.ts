@@ -1,13 +1,27 @@
 import "server-only";
 
+import { randomUUID } from "node:crypto";
 import { redact, auditSummary, RedactionFailure } from "@/lib/redaction/pipeline";
-import { classifyDeterministic, mergeVerdicts, requiresEscalation, auditRisk } from "@/lib/risk/gate";
+import { classifyDeterministic, mergeVerdicts, requiresEscalation, auditRisk, hasClinicalSignal } from "@/lib/risk/gate";
 import { tryClassify } from "@/lib/risk/classifier";
 import { retrieve, getClinic, type RetrievedChunk } from "@/lib/grounding/corpus";
 import { generate, LlmUnavailable, auditLlm } from "@/lib/llm/gemini";
 import { checkOutput, fallbackCopy, auditGuard } from "./guard";
 import { loadCopyRules, normalisePhrase } from "@/lib/config";
 import type { RiskLevel } from "@/lib/config";
+import {
+  detectComplaintType,
+  tryExtract,
+  advance,
+  snapshot as historySnapshot,
+  type HistoryState,
+} from "@/lib/history/engine";
+import {
+  applyFacts,
+  currentProfile,
+  profileSnapshot,
+  type MemoryItem,
+} from "@/lib/history/profile";
 
 /**
  * THE TURN.
@@ -43,6 +57,12 @@ export interface TurnResult {
   citations: { chunkId: string; sourceUrl: string; charStart: number; charEnd: number; documentTitle: string }[];
   /** Redacted text - the only version safe to persist. */
   redactedText: string;
+  /** Id for this message, so extracted facts can point back at it. */
+  messageId: string;
+  history: HistoryState;
+  profile: ReturnType<typeof currentProfile>;
+  memoryItems: MemoryItem[];
+  valueEvents: string[];
   /** PHI-free. Everything here is safe for audit_log. */
   audit: Record<string, unknown>;
 }
@@ -52,6 +72,16 @@ export class QuarantineRequired extends Error {
     super("Redaction failed; message must be quarantined and not processed.");
     this.name = "QuarantineRequired";
   }
+}
+
+export interface TurnInput {
+  history?: string[];
+  memoryItems?: MemoryItem[];
+  historyFilled?: Record<string, string>;
+  complaintType?: string;
+  askedCount?: number;
+  /** guest_messages pre-auth, messages post-auth. Provenance survives conversion. */
+  provenanceTable?: "guest_messages" | "messages";
 }
 
 function bannerFor(country: string): string {
@@ -86,6 +116,7 @@ function buildPrompt(
   redactedText: string,
   chunks: RetrievedChunk[],
   history: string[],
+  next?: { question: string; why: string },
 ): string {
   const source = chunks.length
     ? chunks
@@ -108,11 +139,13 @@ function buildPrompt(
 
 export async function respondToTurn(
   rawText: string,
-  opts: { history?: string[] } = {},
+  opts: TurnInput = {},
 ): Promise<TurnResult> {
   const clinic = getClinic();
   const rules = loadCopyRules();
   const history = opts.history ?? [];
+  const provenanceTable = opts.provenanceTable ?? "guest_messages";
+  const messageId = randomUUID();
 
   // ---- 1. REDACT ----------------------------------------------------------
   let redaction;
@@ -129,7 +162,40 @@ export async function respondToTurn(
   const { verdict: llm, failure } = await tryClassify(redactedText, history);
   const risk = mergeVerdicts(deterministic, llm, rawText);
 
+  // ---- 3. EXTRACT ---------------------------------------------------------
+  // Deliberately BEFORE the branch. Someone who escalates on their first
+  // message should still arrive at the nurse with whatever they already told us.
+  const complaintType = opts.complaintType ?? detectComplaintType(rawText);
+
+  // Skip extraction when the message carries no clinical signal and the risk
+  // gate found nothing. An opening-hours question has no facts to extract, and
+  // on a rate-limited key every avoidable call is one that might otherwise have
+  // been the patient's actual reply.
+  const worthExtracting =
+    risk.riskLevel !== "low" ||
+    hasClinicalSignal(rawText) ||
+    Object.keys(opts.historyFilled ?? {}).length > 0;
+  const extraction = worthExtracting
+    ? await tryExtract(redactedText, complaintType, history)
+    : null;
+
+  const applied = applyFacts(
+    opts.memoryItems ?? [],
+    extraction?.facts ?? [],
+    { table: provenanceTable, messageId },
+  );
+  const filled = { ...(opts.historyFilled ?? {}), ...(extraction?.fields ?? {}) };
+  const historyState = advance(complaintType, filled, risk.riskLevel, opts.askedCount ?? 0);
+
+  const valueEvents: string[] = [];
+  if (historyState.isValueEvent) valueEvents.push("VE_02");
+
   const base = {
+    messageId,
+    history: historyState,
+    profile: currentProfile(applied.items),
+    memoryItems: applied.items,
+    valueEvents,
     riskLevel: risk.riskLevel,
     riskReason: risk.riskReason,
     confidence: risk.confidence,
@@ -147,6 +213,10 @@ export async function respondToTurn(
     ...auditSummary(redaction),
     ...auditRisk(risk),
     llm_classifier: llm ? llm.audit : { unavailable: failure },
+    extraction: extraction ? extraction.audit : { skipped: !worthExtracting },
+    facts_added: applied.added.length,
+    facts_mutated: applied.mutated.length,
+    history_completeness: historyState.completenessPct,
   };
 
   // ---- 3. CRISIS ----------------------------------------------------------
@@ -186,26 +256,48 @@ export async function respondToTurn(
     };
   }
 
-  // ---- 4. MED / HIGH ------------------------------------------------------
-  // Stop advising. The brief: "Med/High Risk: Stop advice. Trigger Send to Clinic."
-  if (requiresEscalation(risk.riskLevel)) {
-    const copy =
-      risk.riskLevel === "high"
-        ? rules.approved.escalation_without_alarm[0]
-        : rules.approved.honest_uncertainty[0];
+  // ---- 4. HIGH ONLY -------------------------------------------------------
+  // The brief says "Med/High Risk: Stop advice. Trigger Send to Clinic." Stop
+  // ADVICE - not stop the conversation; the brief also says patient and AI keep
+  // talking after a handoff. Gathering history is not advice.
+  //
+  // An earlier version returned fixed copy for BOTH medium and high, so someone
+  // with a three-day headache received the identical sentence five turns running
+  // and was never asked a single question. That is worse for the patient AND
+  // worse for the clinician, who then receives an escalation with no history
+  // attached. Only HIGH halts now; the checklist halts with it.
+  if (risk.riskLevel === "high") {
     return {
       ...base,
-      reply: copy,
+      reply: rules.approved.escalation_without_alarm[0],
       citations: [],
       audit: { ...audit, path: "escalation_no_advice", model_used: false },
     };
   }
 
-  // ---- 5. LOW: grounded answer -------------------------------------------
+  // ---- 5. LOW / MEDIUM ----------------------------------------------------
+  // Medium keeps gathering history and offers the handoff alongside, rather
+  // than instead of, the conversation. It is barred from clinical content by
+  // the constraint below plus the post-generation guard.
   const chunks = retrieve(redactedText);
-  const system = SYSTEM_PROMPT.replace("{CLINIC}", clinic.name);
+  const mediumConstraint =
+    risk.riskLevel === "medium"
+      ? `
+
+THIS TURN IS FLAGGED MEDIUM RISK. Give NO clinical information of any kind, not even general education. Acknowledge briefly, ask the next question if one is supplied, and make clear a clinician should look at this. Do not speculate about what it might be, and do not reassure.`
+      : "";
+  const system = SYSTEM_PROMPT.replace("{CLINIC}", clinic.name) + mediumConstraint;
   const timeoutMs = Number(process.env.CHAT_TIMEOUT_MS ?? 10000);
-  const model = process.env.CHAT_MODEL ?? "gemini-3.5-flash";
+  // Quota is metered PER MODEL, so an exhausted primary does not mean an
+  // exhausted account. Falling back to a smaller model degrades answer quality
+  // but keeps the conversation alive, which is strictly better than serving
+  // generic fallback copy to someone mid-sentence. Discovered the hard way:
+  // the free tier allows 20 requests/day/model, and one five-turn conversation
+  // spends most of that.
+  const primaryModel = process.env.CHAT_MODEL ?? "gemini-3.5-flash";
+  const fallbackModel = process.env.CHAT_MODEL_FALLBACK ?? "gemini-3.5-flash-lite";
+  let model = primaryModel;
+  let modelDowngraded = false;
 
   let reply: string | null = null;
   let guardAudit: Record<string, unknown> = {};
@@ -216,11 +308,13 @@ export async function respondToTurn(
       const result = await generate({
         model,
         system: attempt === 0 ? system : `${system}\n\n${guardAudit.retry_hint ?? ""}`,
-        prompt: buildPrompt(redactedText, chunks, history),
+        prompt: buildPrompt(redactedText, chunks, history, historyState.nextQuestion),
         timeoutMs,
         temperature: 0.4,
         maxOutputTokens: 400,
-        thinkingBudget: 0, // latency: the budget is p95 < 3s
+        // flash-lite rejects thinkingConfig with HTTP 400; only the full
+        // flash model accepts it.
+        ...(model.includes("lite") ? {} : { thinkingBudget: 0 }), // latency: the budget is p95 < 3s
       });
       modelAudit = auditLlm(result);
 
@@ -231,6 +325,15 @@ export async function respondToTurn(
       if (guard.ok) reply = result.text.trim();
     } catch (err) {
       if (!(err instanceof LlmUnavailable)) throw err;
+
+      // Quota exhaustion on the primary is recoverable: try the smaller model
+      // once before giving up on generation entirely.
+      if (err.reason === "quota" && model === primaryModel) {
+        model = fallbackModel;
+        modelDowngraded = true;
+        attempt--; // this attempt did not produce a draft to judge
+        continue;
+      }
       modelAudit = { unavailable: `${err.reason}: ${err.message}` };
       break;
     }
@@ -240,6 +343,7 @@ export async function respondToTurn(
   // an edited one. We never patch generated text into compliance.
   const usedFallback = reply === null;
   if (usedFallback) reply = fallbackCopy(risk.riskLevel);
+  if (!usedFallback && chunks.length) valueEvents.push("VE_01");
 
   return {
     ...base,
@@ -259,7 +363,34 @@ export async function respondToTurn(
       model_used: !usedFallback,
       chunks_retrieved: chunks.length,
       chat_model: modelAudit,
+      model_downgraded: modelDowngraded,
       guard: guardAudit,
     },
+  };
+}
+
+/**
+ * The escalation payload.
+ *
+ * The brief: "The record must let a clinician begin a structured review without
+ * the patient repeating their story." A chat transcript does not do that. This
+ * does — the structured history, the living profile including every superseded
+ * state, and the provenance to walk any single fact back to the sentence that
+ * produced it.
+ */
+export function escalationPayload(turn: TurnResult) {
+  return {
+    triggering_message: turn.redactedText,
+    triggering_message_id: turn.messageId,
+    risk: {
+      level: turn.riskLevel,
+      reason: turn.riskReason,
+      confidence: turn.confidence,
+      provenance: turn.riskProvenance,
+      deciding_layer: turn.decidingLayer,
+      matched_rule_id: turn.matchedRuleId,
+    },
+    history_snapshot: historySnapshot(turn.history),
+    profile_snapshot: profileSnapshot(turn.memoryItems),
   };
 }
