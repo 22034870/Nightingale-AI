@@ -128,13 +128,20 @@ is which.`
 
 ### 3b. Ship if time allows (in priority order)
 
-1. **Real Instagram comment→DM in Meta Development Mode** — judges added as Testers so they can
+1. **Risk-gate evaluation harness + cross-language fairness audit** (§16b). ~3h. Zero runtime
+   risk — it measures the safety layer rather than sitting inside it. Highest-value item here
+   because it converts "18 hand-written fixtures pass" into a measured recall figure, and
+   because no other candidate will audit their own safety layer for equity.
+2. **Real Instagram comment→DM in Meta Development Mode** — judges added as Testers so they can
    trigger it themselves. Worth up to 10 bonus points; genuinely reachable now that App Review
    is off the critical path (`report-E` §2). Promote to 3a if the scaffold lands early.
-2. Session recovery — abandoned guest returns via link within 7 days, context intact.
-3. Conflict flagging when extracted facts contradict each other.
-4. Dormant-lead lifecycle (active → cooling → dormant → one consented recall → suppressed).
-5. Intent-based channel rules on top of channel × identity × time.
+3. Session recovery — abandoned guest returns via link within 7 days, context intact.
+4. Conflict flagging when extracted facts contradict each other.
+5. Dormant-lead lifecycle (active → cooling → dormant → one consented recall → suppressed).
+6. Intent-based channel rules on top of channel × identity × time.
+
+> **Gate on all of 3b:** nothing here starts until every row of §3a is done. If block J overruns,
+> item 1 is the first thing cut — it is an addition to a passing build, never a substitute for one.
 
 ### 3c. **[CUT]** — and the honest reason
 
@@ -654,6 +661,82 @@ priority, not a sales priority**. The risk override is applied *after* scoring s
 show both — "this lead scored 0.91, and we are deliberately not selling to them." That
 contrast is one of the most demoable ideas in the build, and it is the brief's own stated rule
 enforced in code rather than promised in prose.
+
+---
+
+## 16b. Measuring the safety layer (§3b item 1)
+
+> **Why this exists.** Right now the honest answer to "how do you know your risk gate works?" is
+> "18 hand-written fixtures pass." That is a vibe, not evidence. This section turns it into a
+> number — and then asks a harder question nobody else in this competition will ask.
+>
+> Datasets verified and licence-checked in `research/report-G-datasets.md`.
+
+### What this is NOT
+
+**No trained model goes in the runtime path.** A classifier deciding whether chest pain escalates
+is an unvalidatable moving part, it costs points on "minimal moving parts", and it is strictly
+worse than deterministic rules for the four mandated phrases. The ML work *measures* the safety
+layer; it does not become part of it.
+
+### The harness
+
+| Step | Dataset | Licence | What it produces |
+|---|---|---|---|
+| Recall on emergencies | `projetogabi/healthbench-multilingual`, English_original, `theme:emergency_referrals` (~475 rows) | MIT | Recall of the deterministic layer, then deterministic + LLM |
+| Precision / false alarms | `gretelai/symptom_to_diagnosis` + `NeuronZero/Symptom2Disease` (~2,265 rows, mostly derm/chronic) | Apache 2.0 | False-positive rate on genuinely non-urgent patient text |
+| Realistic noise | `lavita/ChatDoctor-HealthCareMagic-100k`, 300–500 sampled `input` rows | unstated — cite, don't redistribute | How recall holds up against typos, lowercase, run-ons |
+| Register control | MTSamples (clinician dictation) | Apache 2.0 | Deliberate negative control: recall *should* drop on clinician register |
+
+Report a confusion matrix per layer, so the architecture argument becomes measurable: *the
+deterministic layer alone catches X%; adding the LLM takes it to Y%; here are the Z cases still
+missed and why.*
+
+### The fairness audit — the part that matters
+
+`healthbench-multilingual` is a **true parallel corpus**: `prompt_id` is identical across
+English_original, Malay and Indonesian, so the clinical content is held constant and only the
+language varies. Run the lexicon over each separately and compare recall.
+
+**The question:** does the red-flag detector have equal recall for Malay-language input as for
+English? If it catches 95% of English red flags and 70% of Malay ones, Malay-speaking patients
+are receiving measurably worse triage from the same system. Under the **four-fifths rule** — the
+disparate-impact test used in the FYP fairness audit — that is a finding.
+
+This is a **safety** inequity, not a marketing one. It is also the concrete, measurable form of
+the inclusivity requirement that started this project.
+
+### Methodology, and its stated limits
+
+No Manglish clinical corpus exists anywhere — HuggingFace returns zero hits for
+`malay medical`, `malay health`, `malaysian medical`. So the Manglish arm has to be constructed,
+and the construction has to survive scrutiny:
+
+1. Render the **symptom-bearing clause only** from the English emergency rows into BM/Manglish —
+   not free translation.
+2. Keep the English `prompt_id` as the join key so labels transfer unchanged.
+3. **Write the variants BEFORE reading `red_flags.yaml`, and log that you did.** This is
+   pre-registration, and it is the difference between an audit and a self-congratulation.
+
+Three limitations to state plainly in the brief:
+
+- **Author bias** — partly testing my own lexicon against my own phrasing. Mitigated by (3), not
+  eliminated.
+- **Small n** (≈900) — report confidence intervals, not point recall.
+- **Register skew** — healthbench's Malay is machine-translated and reads formal, so it will
+  **understate** the true Manglish gap. The real-world gap is likely worse than measured.
+
+> A named, bounded limitation earns more credit than a silent one. Say all three out loud.
+
+### What transfers from the FYP
+
+| FYP technique | Why it applies here |
+|---|---|
+| Recall-focused threshold tuning, out-of-fold CV | Red flags are the rare, high-cost class. Same asymmetry as churn, sharper consequences |
+| Class imbalance handling (SMOTE, `scale_pos_weight`) | ~9.5% emergency prevalence in healthbench, close to the 21% churn base rate |
+| Held-out scoring pool never touched during development | Keeps the reported recall honest |
+| SHAP | The brief requires **explainable handoffs**; being able to say *why* a message scored as it did is a scoring line otherwise left on the table |
+| **Fairness audit under the four-fifths rule** | The direct transfer, and the novel contribution |
 
 ---
 
