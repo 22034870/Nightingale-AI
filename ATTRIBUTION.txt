@@ -1,0 +1,140 @@
+NIGHTINGALE — ATTRIBUTION
+=========================
+Nightingale 48-hour build. Jason Ong Yann Jing, September 2026.
+
+All patient data in this project is SYNTHETIC. No real clinic, no real
+clinicians, no real patients. "Harmoni Medical Centre" is invented, and its
+website corpus in db/seed/clinic-corpus.json was written for this build.
+
+
+RUNTIME DEPENDENCIES
+--------------------
+next                     16.3.4     MIT          React framework, PWA shell, API routes
+react                    19.2.8     MIT
+react-dom                19.2.8     MIT
+@supabase/supabase-js    2.112.4    MIT          Postgres client, RLS-scoped queries
+@supabase/ssr            0.12.5     MIT          Server-side Supabase helpers
+js-yaml                  5.4.1      MIT          Parses the safety configuration files
+server-only              0.0.1      MIT          Prevents server modules reaching the client
+
+DEVELOPMENT DEPENDENCIES
+------------------------
+typescript               5.9.3      Apache-2.0
+tailwindcss              4.3.3      MIT
+@tailwindcss/postcss     4.3.3      MIT
+eslint                   9.39.5     MIT
+eslint-config-next       16.3.4     MIT
+@types/node              20.19.43   MIT
+@types/react             19.2.18    MIT
+@types/react-dom         19.2.5     MIT
+@types/js-yaml           4.0.9      MIT
+
+459 packages resolve transitively; all direct dependencies are MIT or Apache-2.0.
+No copyleft licence is present in the dependency tree.
+
+PYTHON (test suite only, not shipped)
+-------------------------------------
+pytest                              MIT          Test runner
+requests                            Apache-2.0   HTTP client for API-level tests
+PyYAML                              MIT          Tests read the same config the app does
+
+
+MODELS
+------
+Google Gemini 3.5 Flash             Google AI Studio API, commercial terms
+  Conversational replies. Downgrades to Flash Lite on quota exhaustion.
+
+Google Gemini 3.5 Flash Lite        Google AI Studio API, commercial terms
+  Risk classification and structured fact extraction. Runs on every message.
+
+No model was fine-tuned or trained. No patient data was used for training. All
+model calls receive REDACTED text only — see lib/redaction/pipeline.ts.
+
+NOTE ON DATA RESIDENCY: the AI Studio endpoint accepts no region parameter, so
+LLM_REGION records intent rather than routing. Production would use Vertex AI in
+asia-southeast1. Documented as a known limitation in the Technical Brief rather
+than hidden.
+
+
+CLINICAL SOURCES
+----------------
+The red-flag lexicon in config/red_flags.yaml is derived from published triage
+protocols. No protocol text is reproduced; the phrases are lay-language
+renderings, and every rule carries its source in the `source` field.
+
+  Manchester Triage System (MTS)              red-flag structure
+  Emergency Severity Index (ESI)              acuity definitions
+  WHO Emergency Triage Assessment (ETAT)      paediatric red flags
+  NHS 111 / NHS Pathways                      red-flag phrasing
+  FAST criteria                               stroke recognition
+
+MENTAL HEALTH SAFE MESSAGING
+  WHO suicide-prevention media guidance
+  Samaritans media guidelines
+  #chatsafe (Orygen)
+  Applied in config/copy_rules.yaml: never "commit suicide", never ask about
+  method, never attempt AI-delivered therapy.
+
+CRISIS RESOURCES (real, publicly listed helplines)
+  Befrienders Kuala Lumpur         +603-7627 2929
+  Talian Kasih (KPWKM)             15999
+  Samaritans of Singapore (SOS)    1767
+  Institute of Mental Health (SG)  6389 2222
+
+
+REGULATORY AND RESEARCH SOURCES
+-------------------------------
+Full citations with URLs in research/report-A&B.md, report-E-platform-gaps.md
+and report-F-funnel-evidence.md.
+
+  Personal Data Protection Act 2010 (Act 709) and Amendment Act 2024 (A1727)
+  PDPA Cross-Border Transfer Guideline 03/2025
+  Medicines (Advertisement and Sale) Act 1956; MAB advertising guidelines
+  Private Healthcare Facilities and Services Act 1998
+  Medical Act 1971; MMC guidance on social media and telemedicine
+  Telemedicine Act 1997 (Act 564) — cited as NOT IN FORCE; see brief
+  Singapore Healthcare Services (Advertisement) Regulations 2021
+  Meta Messenger Platform / Instagram private-reply documentation
+
+BEHAVIOURAL AND CLINICAL LITERATURE cited in the brief
+  Turner et al. (1998), Science 280:867-873 — computer administration and
+    disclosure of stigmatised behaviours, N=1,690 randomised
+  Lucas et al. (2014), Computers in Human Behavior 37:94-100 — disclosure to
+    virtual interviewers, N=239
+  Zhu & Broadbent (2025), Computers in Human Behavior 169:108683 — anthropomorphic
+    agents and socially desirable responding, N=160
+  Longoni, Bonezzi & Morewedge (2019), J. Consumer Research 46(4):629-650
+  Gnewuch et al. (2022), Business & Information Systems Engineering 64(6):773-791
+  Galesic & Bosnjak (2009), Public Opinion Quarterly 73(2):349-360
+  Sweeney, L. — re-identification from quasi-identifiers
+  Nielsen Norman Group — response-time limits
+  Zuko Analytics 2025 healthcare form benchmarking (vendor analytics, labelled)
+  Baymard Institute — cart abandonment and form-field research
+
+DE-IDENTIFICATION PRIOR ART consulted, not vendored
+  UCSF Philter; Microsoft Presidio; HIPAA Safe Harbor 18 identifiers
+  The pipeline here is an original implementation. Their layered architecture
+  (deterministic → gazetteer → context) informed the ordering.
+
+DATASETS identified for the evaluation harness (see research/report-G-datasets.md)
+  projetogabi/healthbench-multilingual         MIT
+  gretelai/symptom_to_diagnosis                Apache-2.0
+  NeuronZero/Symptom2Disease                   Apache-2.0
+  Not vendored into this repository.
+
+
+TOOLS
+-----
+Claude Opus 5 (Anthropic) — pair-programming throughout; commit co-authorship
+  recorded in git history.
+Google Gemini Deep Research and Perplexity Deep Research — the four research
+  reports in research/, subsequently verified and in several places corrected.
+  Corrections are recorded in research/FINDINGS.md rather than quietly fixed.
+
+
+ORIGINAL WORK
+-------------
+All application code, the database schema and its RLS policies, the four YAML
+safety configurations, the History Engine and its clinical checklists, the
+redaction pipeline and its SEA identifier patterns, the synthetic clinic corpus,
+and the test suite were written for this submission.
