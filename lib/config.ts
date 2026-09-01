@@ -17,9 +17,8 @@ import { load } from "js-yaml";
  *   2. The pytest suite reads the same YAML the app does, so a test cannot
  *      silently drift from the behaviour it claims to verify.
  *
- * Loaded once per process and cached. Config changes need a restart, which is
- * the correct trade for something that must not vary between two messages in
- * the same conversation.
+ * Cached per process in production, re-read every call in development.
+ * See SHOULD_CACHE below for why the two differ.
  */
 
 // ---------------------------------------------------------------------------
@@ -67,6 +66,8 @@ export interface RedFlagsConfig {
   context_guards: Record<string, ContextGuard>;
   red_flags: RedFlag[];
   ambiguous: { id: string; severity: Severity; rationale: string; variants: string[] }[];
+  /** Scopes the fail-closed rule to plausibly-clinical messages. */
+  clinical_signal: { terms: string[]; note?: string };
   must_escalate_high: string[];
   must_not_be_low: string[];
   should_be_low: string[];
@@ -112,6 +113,44 @@ export interface CopyRulesConfig {
   retention: Record<string, { days?: number; years?: number; justification: string }>;
 }
 
+/**
+ * Token-aware containment.
+ *
+ * Plain `String.includes` is wrong for a multilingual lexicon: "opening hours"
+ * contains "pening" (Bahasa for dizzy), so an administrative question was being
+ * scored as carrying clinical signal. Short loanwords sit inside longer English
+ * words constantly, and the failure is silent.
+ *
+ * So a term must match at a TOKEN BOUNDARY. Prefix matching within a token is
+ * still allowed, because it is how "bleed" reaches "bleeding" and "cough"
+ * reaches "coughing" without listing every inflection — but "pening" no longer
+ * reaches "opening", because "opening" does not begin with it.
+ *
+ * Both inputs must already be normalised.
+ */
+export function containsTerm(normalisedText: string, normalisedTerm: string): boolean {
+  if (!normalisedTerm) return false;
+
+  // Multi-word terms: whole-phrase match on token boundaries.
+  if (normalisedTerm.includes(" ")) {
+    return ` ${normalisedText} `.includes(` ${normalisedTerm} `);
+  }
+
+  for (const token of normalisedText.split(" ")) {
+    if (token.startsWith(normalisedTerm)) return true;
+  }
+  return false;
+}
+
+export interface CompiledFlag {
+  ruleId: string;
+  phrase: string;
+  severity: Severity;
+  crisisPathway: boolean;
+  system: string;
+  rationale: string;
+}
+
 // ---------------------------------------------------------------------------
 // Loader
 // ---------------------------------------------------------------------------
@@ -140,11 +179,29 @@ function readYaml<T>(filename: string): T {
   return parsed;
 }
 
+/**
+ * Config is cached per process in production and re-read every call in
+ * development.
+ *
+ * Production wants the cache: the risk lexicon must not change between two
+ * messages of the same conversation, and a restart is the correct way to roll
+ * out a safety-config change.
+ *
+ * Development must NOT cache. Editing a YAML file does not invalidate a JS
+ * module, so a cached config leaves the old lexicon live while the file on disk
+ * says something else — which is exactly how you convince yourself a red flag is
+ * covered when it is not. This bit me during block C: adding `clinical_signal`
+ * to the YAML produced a 500 because the process was still serving a parse from
+ * before the section existed.
+ */
+const SHOULD_CACHE = process.env.NODE_ENV === "production";
+
 let redFlagsCache: RedFlagsConfig | undefined;
 let copyRulesCache: CopyRulesConfig | undefined;
+let compiledCache: CompiledFlag[] | undefined;
 
 export function loadRedFlags(): RedFlagsConfig {
-  if (!redFlagsCache) {
+  if (!SHOULD_CACHE || !redFlagsCache) {
     const cfg = readYaml<RedFlagsConfig>("red_flags.yaml");
 
     // Integrity check, not decoration. The brief names four phrases that must
@@ -158,12 +215,13 @@ export function loadRedFlags(): RedFlagsConfig {
       );
     }
     redFlagsCache = cfg;
+    if (!SHOULD_CACHE) compiledCache = undefined; // derived index must follow
   }
   return redFlagsCache;
 }
 
 export function loadCopyRules(): CopyRulesConfig {
-  if (!copyRulesCache) {
+  if (!SHOULD_CACHE || !copyRulesCache) {
     copyRulesCache = readYaml<CopyRulesConfig>("copy_rules.yaml");
   }
   return copyRulesCache;
@@ -183,19 +241,10 @@ export function normalisePhrase(text: string): string {
     .trim();
 }
 
-export interface CompiledFlag {
-  ruleId: string;
-  phrase: string;
-  severity: Severity;
-  crisisPathway: boolean;
-  system: string;
-  rationale: string;
-}
 
-let compiledCache: CompiledFlag[] | undefined;
 
 export function compileRedFlagIndex(): CompiledFlag[] {
-  if (compiledCache) return compiledCache;
+  if (SHOULD_CACHE && compiledCache) return compiledCache;
 
   const cfg = loadRedFlags();
   const out: CompiledFlag[] = [];

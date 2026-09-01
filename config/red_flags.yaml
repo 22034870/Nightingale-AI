@@ -176,16 +176,29 @@ red_flags:
       - "difficulty breathing"
       - "can't breathe"
       - "cant breathe"
+      # "cannot breathe" was missing. It fell through to the fail-closed floor
+      # (medium) rather than being missed entirely, which is the layered design
+      # working — but a phrase this ordinary belongs in the deterministic layer,
+      # not rescued by the safety net beneath it.
+      - "cannot breathe"
+      - "can not breathe"
+      - "unable to breathe"
+      - "struggling to breathe"
       - "hard to breathe"
+      - "trouble breathing"
+      - "breathless"
+      - "gasping"
       - "shortness of breath"
       - "short of breath"
       - "cannot catch breath"
+      - "catch my breath"
       - "breath no enough"
       - "panting"
       - "semput"
       - "sesak nafas"
       - "susah bernafas"
       - "tak boleh nafas"
+      - "tak dapat nafas"
 
   # ---- NEUROLOGICAL -----------------------------------------------------
   - id: RF_NEURO_01
@@ -436,6 +449,121 @@ ambiguous:
       - "rasa tak sedap badan"
       - "rasa pelik"
       - "tak sedap hati"
+
+# -----------------------------------------------------------------------------
+# CLINICAL SIGNAL — scopes the fail-closed rule
+# -----------------------------------------------------------------------------
+# When the LLM classifier is unavailable the system fails CLOSED to medium
+# rather than open to low. But applying that to EVERY message means an outage
+# turns "what are your opening hours?" into a clinical escalation, floods the
+# nurse queue with administrative questions, and buries the one real emergency
+# behind thirty of them — which is precisely the failure mode described in
+# PLANNING §2 (secondary user).
+#
+# So fail-closed is scoped: it applies to messages that are plausibly ABOUT a
+# symptom. This list is deliberately broad and cheap. It is not a classifier —
+# it only answers "could this conceivably be clinical?", and it answers yes on
+# anything doubtful. Missing a symptom word costs recall on an already-degraded
+# path; matching an extra one costs a needless escalation, which is the cheaper
+# error.
+clinical_signal:
+  terms:
+    # Body regions
+    - chest
+    - heart
+    - head
+    - stomach
+    - belly
+    - abdomen
+    - throat
+    - breast
+    - back
+    - groin
+    - womb
+    - period
+    - dada
+    - kepala
+    - perut
+    - jantung
+    - tekak
+    - haid
+    # Symptom vocabulary
+    - pain
+    - painful
+    - hurt
+    - ache
+    - aching
+    - sore
+    - bleed
+    - bleeding
+    - blood
+    - breath
+    - breathing
+    - dizzy
+    - dizziness
+    - faint
+    - fainting
+    - fever
+    - temperature
+    - vomit
+    - vomiting
+    - nausea
+    - nauseous
+    - swelling
+    - swollen
+    - rash
+    - lump
+    - numb
+    - numbness
+    - weak
+    - weakness
+    - cramp
+    - cramping
+    - discharge
+    - cough
+    - itch
+    - itchy
+    - tired
+    - fatigue
+    - symptom
+    - symptoms
+    - sakit
+    - demam
+    - darah
+    - nafas
+    - pening
+    - muntah
+    - bengkak
+    - gatal
+    - lemah
+    - kebas
+    - letih
+    # Care-seeking and clinical context
+    - doctor
+    - clinic
+    - hospital
+    - nurse
+    - medication
+    - medicine
+    - tablet
+    - pill
+    - dose
+    - allergy
+    - allergic
+    - pregnant
+    - pregnancy
+    - diagnosis
+    - test result
+    - scan
+    - biopsy
+    - ubat
+    - doktor
+    - mengandung
+    - hamil
+  note: >
+    Matched as normalised substrings, same as the red-flag index. A hit does
+    NOT raise risk on its own — it only permits the fail-closed floor to apply
+    when the classifier is unavailable.
 
 # -----------------------------------------------------------------------------
 # TEST FIXTURES — test_risk_escalation.py asserts against these
