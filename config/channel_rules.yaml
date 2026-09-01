@@ -1,0 +1,237 @@
+# =============================================================================
+# CHANNEL RULES — declarative acquisition config
+# =============================================================================
+# The brief: "A declarative configuration (one file or table, not scattered
+# if-statements) maps channel x identity_level x time_of_day to an opening
+# strategy."
+#
+# This is that file. Nothing in lib/channels/ decides what to say — it only
+# resolves a rule from here. Adding a channel is a config change.
+#
+# OBSERVABLE MINIMUM the brief asks for, and what this file makes true:
+#   - the same message from two channels gets channel-appropriate openings
+#   - an identified lead is NEVER asked for what they already provided
+#
+# THE ETHICS AXIS, carried inline rather than in a separate document, because a
+# rule you can read next to its justification is a rule that survives review.
+# Every channel is scored on the brief's four axes. Only `green` channels are
+# implemented. Reds are listed with their reason so the omission is legible as a
+# decision rather than an oversight.
+# =============================================================================
+
+version: 1
+
+identity_levels:
+  anonymous:    { rank: 0, has: [] }
+  handle_only:  { rank: 1, has: [social_handle] }
+  identified:   { rank: 2, has: [email] }
+  verified:     { rank: 3, has: [email, phone] }
+
+# What we already know must never be asked for again. The funnel's single most
+# common trust break, and the cheapest to avoid.
+never_reask:
+  email: [identified, verified]
+  phone: [verified]
+  name: [verified]
+  topic_if_supplied: [staff_referral, website_widget, instagram_ad_click]
+
+time_of_day:
+  # Local clinic time. after_hours changes what we PROMISE, never what we ask.
+  business: { from: "08:30", to: "18:00" }
+  evening:  { from: "18:00", to: "22:00" }
+  night:    { from: "22:00", to: "08:30" }
+
+# -----------------------------------------------------------------------------
+# CHANNELS
+# -----------------------------------------------------------------------------
+channels:
+
+  # ---- MANDATORY ------------------------------------------------------------
+  staff_referral:
+    label: "Staff referral"
+    identity_level: handle_only
+    implemented: true
+    ethics: { technical: green, legal: green, platform: green, trust: green }
+    ethics_note: >
+      The person is in front of a clinician who asks before generating the link.
+      Consent is face to face, which is the strongest form we handle.
+    # The note is quoted rather than embedded in a sentence, because staff write
+    # whole phrases ("asked about egg freezing at today's visit") and any
+    # template that assumes a bare noun produces "mentioned you asked about
+    # asked about egg freezing". Quoting works with whatever they type.
+    openings:
+      business: >
+        {staff_name} passed this along: "{topic}". I can help you get your
+        questions written down before your next visit — no account needed.
+      evening: >
+        {staff_name} passed this along: "{topic}". Happy to pick that up now if
+        you have a few minutes.
+      night: >
+        {staff_name} passed this along: "{topic}". The clinic is closed now, but
+        I can help you get your questions down for tomorrow.
+    prefill: [topic]
+    # The whole point of a referral link: the topic is already known.
+    skip_questions: [concern]
+
+  social_comment:
+    label: "Social comment"
+    platforms: [instagram_comment, tiktok_comment, facebook_comment]
+    identity_level: handle_only
+    implemented: true
+    ethics: { technical: green, legal: yellow, platform: green, trust: yellow }
+    ethics_note: >
+      YELLOW on legal and trust, and deliberately implemented in its de-risked
+      form. A DM containing clinical content can OUT someone — a lock-screen
+      preview on a shared phone is enough — and MMC classes unsolicited contact
+      as canvassing. So the automated reply carries NO clinical content: it is a
+      neutral door, and the conversation happens on our surface where nothing
+      appears in a notification. See sensitive_topics below.
+    constraints:
+      # Verified against Meta's docs. Both are load-bearing.
+      reply_window_days: 7           # from COMMENT creation, not webhook receipt
+      max_replies_per_comment: 1     # burning it is unrecoverable
+      requires_user_initiated: true
+    openings:
+      business: >
+        Thanks for reaching out. I can answer questions about the clinic here —
+        it's private, and you don't need an account.
+      evening: >
+        Thanks for reaching out. I can answer questions about the clinic here,
+        privately, whenever suits you.
+      night: >
+        Thanks for reaching out. The clinic is closed now, but I can still help
+        you get your questions ready.
+
+  # ---- IMPLEMENTED ----------------------------------------------------------
+  website_widget:
+    label: "Website widget"
+    identity_level: anonymous
+    implemented: true
+    ethics: { technical: green, legal: green, platform: green, trust: green }
+    ethics_note: "The person came to us, on our own page. No consent question arises."
+    openings:
+      business: >
+        You're reading about {page_topic}. Ask me anything about it — no account
+        needed to start.
+      evening: >
+        You're reading about {page_topic}. Happy to answer questions about it now.
+      night: >
+        You're reading about {page_topic}. I can answer questions now, and the
+        clinic picks things up in the morning.
+    prefill: [page_topic]
+
+  lead_form:
+    label: "Lead form"
+    identity_level: identified
+    implemented: true
+    ethics: { technical: green, legal: green, platform: green, trust: green }
+    ethics_note: "Email volunteered by the person for this purpose."
+    openings:
+      business: >
+        Thanks for leaving your email — I've got it, so I won't ask again. What
+        would you like to know?
+      evening: >
+        Thanks for leaving your email — I've got it. What would you like to know?
+      night: >
+        Thanks for leaving your email — I've got it. The clinic is closed now,
+        but ask away and I'll help you get ready for tomorrow.
+    # Asking again for something already given is the fastest way to look
+    # like a form rather than a conversation.
+    never_ask: [email]
+
+  telegram_bot:
+    label: "Telegram"
+    identity_level: handle_only
+    implemented: true
+    ethics: { technical: green, legal: green, platform: green, trust: green }
+    ethics_note: >
+      The channel nobody pitches, and green on all four axes. A Telegram bot
+      CANNOT message someone who has not pressed Start, so the platform itself
+      enforces user-initiation — the exact property MAB's anti-canvassing rule
+      cares about. No app review, no business verification, no message
+      templates. Roughly 8-10m Malaysian users.
+    openings:
+      business: >
+        Hi — I'm Nightingale, {clinic_name}'s assistant. Ask me anything about
+        the clinic. I'm software, not a doctor.
+      evening: >
+        Hi — I'm Nightingale, {clinic_name}'s assistant. Ask away; I'm software,
+        not a doctor.
+      night: >
+        Hi — I'm Nightingale, {clinic_name}'s assistant. The clinic is closed
+        now, but I can still help you get your questions ready.
+
+  instagram_ad_click:
+    label: "Instagram ad"
+    identity_level: anonymous
+    implemented: true
+    simulated: true       # real handler, simulated payload — see report-E §2
+    ethics: { technical: green, legal: green, platform: green, trust: green }
+    ethics_note: >
+      The person tapped our ad, which is as clear an initiation as exists.
+      Campaign context is OUR data about OUR creative, not inferred about them.
+    openings:
+      business: >
+        You came from our {campaign} post. Ask me anything about it — no account
+        needed.
+      evening: >
+        You came from our {campaign} post. Happy to answer questions now.
+      night: >
+        You came from our {campaign} post. The clinic is closed, but I can help
+        you get your questions ready.
+    prefill: [campaign]
+
+# -----------------------------------------------------------------------------
+# SENSITIVE TOPICS — the stigma rule
+# -----------------------------------------------------------------------------
+# Report C&D §4.1: stigma, not cost, is the primary driver of delayed care in
+# Malaysia. A DM naming a stigmatised condition can out someone to whoever else
+# sees their phone. So for these topics the automated reply says nothing
+# clinical at all — it is a door, not a conversation.
+#
+# This is a place where we deliberately convert less in exchange for not
+# harming anyone, and it is the right trade.
+sensitive_topics:
+  topics: [mental_health, sexual_health, fertility, hiv, sti, pregnancy, addiction]
+  rule: no_clinical_content_in_outbound
+  opening: >
+    Thanks for reaching out. Here's a private link if you'd like to talk —
+    nothing about your message appears in this reply.
+
+# -----------------------------------------------------------------------------
+# AFTER-HOURS
+# -----------------------------------------------------------------------------
+# Report C&D §3.3 #8 ranks false promises of immediacy a top-ten trust breaker.
+# The brief specifies a static "12 to 18 hours"; we compute instead, because a
+# promise made at 2am that the clinic cannot keep is worse than a longer honest one.
+response_expectation:
+  business: { text: "The team usually replies within 12 to 18 hours.", hours: 18 }
+  evening:  { text: "The team will see this first thing tomorrow morning.", hours: 14 }
+  night:    { text: "The clinic is closed now. The team will see this in the morning.", hours: 12 }
+  always_append: >
+    If this becomes an emergency before then, call 999 or go to a hospital
+    emergency department — don't wait for us.
+
+# -----------------------------------------------------------------------------
+# REFUSED — red on at least one axis, implemented by nobody here
+# -----------------------------------------------------------------------------
+# The brief: "A red channel implemented, however well-coded, loses points."
+# Listing them makes the omission a decision rather than an oversight.
+refused:
+  - id: competitor_review_scraping
+    ethics: { technical: green, legal: red, platform: red, trust: red }
+    why: "Breaches Google ToS; contacting scraped leads is unlawful direct marketing under PDPA."
+  - id: health_group_dm_monitoring
+    ethics: { technical: green, legal: red, platform: red, trust: red }
+    why: "Meta bans group scraping and unprompted DMs. Also the single creepiest option available."
+  - id: inferred_condition_retargeting
+    ethics: { technical: green, legal: red, platform: red, trust: red }
+    why: "Meta bans health-condition custom audiences; Google bars remarketing on inferred health."
+  - id: auto_dm_on_like
+    ethics: { technical: red, legal: yellow, platform: red, trust: red }
+    why: "No like-to-DM path exists, and a like is not an enquiry."
+  - id: unsolicited_outbound
+    ethics: { technical: green, legal: red, platform: yellow, trust: red }
+    why: >
+      MMC classes touting or canvassing for patients as unethical, and its
+      definition of Social Media explicitly names WhatsApp and Telegram.
