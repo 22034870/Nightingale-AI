@@ -13,3 +13,5 @@ Thumbs.db
 dev.log
 dev.err.log
 *.tsbuildinfo
+AGENTS.md
+CLAUDE.md
