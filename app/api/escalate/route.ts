@@ -62,7 +62,13 @@ export async function POST(request: Request) {
         trigger_message_id: turn.messageId,
         triage_summary: summary,
         profile_snapshot_json: payload.profile_snapshot,
-        acquisition_context_json: body.attribution ?? {},
+        acquisition_context_json: {
+          ...(body.attribution ?? {}),
+          // Carried so the clinician view can load the conversation back.
+          // Without this the payload arrives with no route to what the patient
+          // actually said, which defeats the point of storing it.
+          lead_session_id: leadSessionId ?? null,
+        },
         history_snapshot_json: payload.history_snapshot,
         status: "sent",
         sla_due_at: slaDueAt,

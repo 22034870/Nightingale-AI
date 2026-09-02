@@ -176,6 +176,32 @@ export default function ChatClient({ opening }: { opening: string }) {
         body: JSON.stringify({ text: last?.text ?? "", ...state }),
       });
       const data = await res.json();
+
+      // A CONFIRMATION IS A PROMISE. Only make it if the write happened.
+      //
+      // This previously printed "Sent to the clinical team" unconditionally,
+      // while the API was returning persisted:false because no database was
+      // configured. The payload was assembled, returned, and discarded when the
+      // tab closed. A frightened person would have read "Sent" and stopped
+      // worrying about something nobody would ever see.
+      //
+      // Every other failure path in this product is honest. The SUCCESS path
+      // was the one that lied.
+      if (!res.ok || data.persisted !== true) {
+        setMessages((m) => [
+          ...m,
+          {
+            role: "assistant",
+            text:
+              "I couldn't deliver that to the clinical team — nothing has been " +
+              "sent. Please contact the clinic directly, and if this is urgent " +
+              "call 999 or go to a hospital emergency department.",
+          },
+        ]);
+        console.error("[nightingale] escalation not persisted", data.persist_error);
+        return;
+      }
+
       // Honest confirmation: says what was sent and when to expect a reply,
       // computed from clinic hours rather than promised as a fixed number.
       setSent(data.response_expectation ?? "Sent to the clinical team.");
