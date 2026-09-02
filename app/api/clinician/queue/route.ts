@@ -56,7 +56,11 @@ export async function GET(request: Request) {
     }
 
     const acquisition = (data.acquisition_context_json ?? {}) as Record<string, unknown>;
-    const leadSessionId = acquisition.lead_session_id as string | undefined;
+    // Column first; the JSON key is the pre-migration fallback for rows written
+    // before escalations.lead_session_id existed.
+    const leadSessionId =
+      (data.lead_session_id as string | null) ??
+      (acquisition.lead_session_id as string | undefined);
 
     return NextResponse.json({
       escalation: {
@@ -79,7 +83,7 @@ export async function GET(request: Request) {
   // ---- The queue ----------------------------------------------------------
   const { data, error } = await db
     .from("escalations")
-    .select("id, status, created_at, sla_due_at, triage_summary, profile_snapshot_json, acquisition_context_json")
+    .select("id, status, created_at, sla_due_at, triage_summary, profile_snapshot_json, acquisition_context_json, lead_session_id")
     .order("created_at", { ascending: false })
     .limit(100);
 

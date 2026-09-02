@@ -114,9 +114,14 @@ export default function ClinicianClient() {
       <section>
         <div className="flex items-baseline justify-between">
           <h1 className="text-2xl font-semibold text-slate-900">Triage queue</h1>
-          <button onClick={refresh} className="text-sm text-teal-800 hover:underline">
-            Refresh
-          </button>
+          <div className="flex items-center gap-4 text-sm">
+            <a href="/dashboard" className="text-teal-800 hover:underline">
+              Dashboard
+            </a>
+            <button onClick={refresh} className="text-teal-800 hover:underline">
+              Refresh
+            </button>
+          </div>
         </div>
         <p className="mt-1 text-sm text-slate-600">
           Sorted by clinical risk, then by how long someone has been waiting.

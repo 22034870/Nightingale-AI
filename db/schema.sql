@@ -273,7 +273,10 @@ create index on citations(message_id);
 
 create table escalations (
   id                       uuid primary key default gen_random_uuid(),
-  patient_id               uuid not null references patients(id) on delete cascade,
+  -- NULLABLE on purpose. A guest must be able to reach a nurse before an
+  -- account exists; requiring a patient row here rebuilt the signup wall.
+  patient_id               uuid references patients(id) on delete cascade,
+  lead_session_id          uuid references lead_sessions(id) on delete set null,
   trigger_message_id       uuid not null,
   triage_summary           text not null,            -- 1-5 bullets
   profile_snapshot_json    jsonb not null,           -- point-in-time copy
@@ -284,6 +287,11 @@ create table escalations (
   created_at               timestamptz not null default now()
 );
 create index on escalations(patient_id, created_at desc);
+create index on escalations(lead_session_id);
+-- An escalation must identify someone; nullable patient_id must not become
+-- a way to file an anonymous, unactionable ticket.
+alter table escalations add constraint escalations_identifies_someone
+  check (patient_id is not null or lead_session_id is not null);
 create index on escalations(status) where status in ('sent','acknowledged');
 
 -- Reserved for the clinician module that attaches later. No migration needed.
@@ -481,8 +489,14 @@ create policy patient_reads_own_escalations on escalations
   for select using (
     exists (select 1 from patients p
             where p.id = escalations.patient_id
-              and (p.auth_uid = auth.uid() or is_care_team()))
+              and p.auth_uid = auth.uid())
   );
+
+-- Separate from the patient's own-record access so staff access can be
+-- reasoned about, and revoked, on its own. This is also what makes a GUEST
+-- escalation (patient_id null) visible to the care team at all.
+create policy care_team_reads_escalations on escalations
+  for select using (is_care_team());
 
 create policy care_team_updates_escalations on escalations
   for update using (is_care_team()) with check (is_care_team());

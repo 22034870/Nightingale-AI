@@ -59,6 +59,10 @@ export async function POST(request: Request) {
       .from("escalations")
       .insert({
         patient_id: typeof body.patientId === "string" ? body.patientId : null,
+        // A real column, not a JSON key. patient_id is null for a guest, and
+        // this is then the only route from the escalation back to what was
+        // actually said — see db/migrations/001_guest_escalations.sql.
+        lead_session_id: leadSessionId ?? null,
         trigger_message_id: turn.messageId,
         triage_summary: summary,
         profile_snapshot_json: payload.profile_snapshot,
