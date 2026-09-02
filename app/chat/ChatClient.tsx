@@ -73,12 +73,21 @@ export default function ChatClient({ opening }: { opening: string }) {
     askedCount: 0,
   });
 
+  // A ref, not the `busy` state, guards against double submission.
+  //
+  // React state updates are asynchronous, so two submits landing in the same
+  // tick BOTH read busy===false and both fire. Observed in production: one
+  // click on Send produced two POSTs to /api/chat 0.65s apart — double the
+  // quota, double the extraction, and two assistant replies racing to set
+  // state. A ref updates synchronously, so the second call sees it immediately.
+  const inFlight = useRef(false);
   const endRef = useRef<HTMLDivElement>(null);
   useEffect(() => endRef.current?.scrollIntoView({ behavior: "smooth" }), [messages]);
 
   async function send() {
     const text = input.trim();
-    if (!text || busy) return;
+    if (!text || inFlight.current) return;
+    inFlight.current = true;
 
     setInput("");
     setMessages((m) => [...m, { role: "user", text }]);
@@ -119,12 +128,27 @@ export default function ChatClient({ opening }: { opening: string }) {
       setBanner(data.emergency_banner ?? null);
       setCanEscalate(Boolean(data.escalation_required));
       setState(data.state ?? state);
+    } catch (err) {
+      // Never let a failed request take the page down. Say what happened.
+      setMessages((m) => [
+        ...m,
+        {
+          role: "assistant",
+          text:
+            "I couldn't reach the clinic's system just then, and I haven't sent " +
+            "anything anywhere. Please try again.",
+        },
+      ]);
+      console.error("[nightingale] chat request failed", err);
     } finally {
+      inFlight.current = false;
       setBusy(false);
     }
   }
 
   async function escalate() {
+    if (inFlight.current) return;
+    inFlight.current = true;
     setBusy(true);
     try {
       const last = [...messages].reverse().find((m) => m.role === "user");
@@ -138,7 +162,20 @@ export default function ChatClient({ opening }: { opening: string }) {
       // computed from clinic hours rather than promised as a fixed number.
       setSent(data.response_expectation ?? "Sent to the clinical team.");
       setCanEscalate(false);
+    } catch (err) {
+      // An escalation that failed must never look like one that succeeded.
+      setMessages((m) => [
+        ...m,
+        {
+          role: "assistant",
+          text:
+            "That didn't send. Nothing has reached the clinical team yet — " +
+            "please try again, and if this is urgent call 999.",
+        },
+      ]);
+      console.error("[nightingale] escalation failed", err);
     } finally {
+      inFlight.current = false;
       setBusy(false);
     }
   }
@@ -240,6 +277,7 @@ export default function ChatClient({ opening }: { opening: string }) {
             <button
               type="submit"
               disabled={busy || !input.trim()}
+              aria-busy={busy}
               className="rounded-lg bg-slate-900 px-4 py-2 text-sm text-white disabled:opacity-40"
             >
               Send
