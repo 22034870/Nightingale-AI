@@ -31,6 +31,7 @@ interface Funnel {
   entered: number;
   completed: number;
   completion_rate: number | null;
+  account_branch: Record<string, number>;
 }
 
 interface Analytics {
@@ -248,8 +249,13 @@ export default function DashboardClient() {
 }
 
 function FunnelCard({ funnel }: { funnel: Funnel }) {
-  const max = Math.max(1, ...Object.values(funnel.stages));
-  const shown = Object.entries(funnel.stages).filter(([, v]) => v > 0);
+  // Main path only. The account-creation stages are a separate, optional
+  // branch — drawing them in the same bar chart is what made "0% carried to
+  // signup" look like a finding rather than an artefact.
+  const MAIN = ["visitor", "conversation_started", "value_event", "escalation_sent"];
+  const shown = MAIN.map((k) => [k, funnel.stages[k] ?? 0] as const).filter(([, v]) => v > 0);
+  const max = Math.max(1, ...shown.map(([, v]) => v));
+  const accounts = Object.values(funnel.account_branch ?? {}).reduce((a, b) => a + b, 0);
 
   return (
     <div className="rounded-lg border border-slate-200 p-4">
@@ -276,6 +282,13 @@ function FunnelCard({ funnel }: { funnel: Funnel }) {
           />
         ))}
       </div>
+
+      {accounts > 0 && (
+        <p className="mt-2 text-xs text-slate-600">
+          {funnel.account_branch.patient_created ?? 0} also created an account.
+          Optional — reaching a nurse never requires one.
+        </p>
+      )}
 
       {funnel.biggest_drop_off && funnel.biggest_drop_off.lost > 0 && (
         <p className="mt-3 rounded border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-900">

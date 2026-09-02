@@ -24,15 +24,32 @@ import { serviceClient, hasDatabase } from "@/lib/db/client";
  * traffic is worse than no dashboard.
  */
 
-const FUNNEL_ORDER = [
+/**
+ * THE FUNNEL IS NOT A LINE, AND TREATING IT AS ONE PRODUCES A PHANTOM.
+ *
+ * The first version of this ran conversion across all seven stages in order,
+ * signup included. Every channel then reported the same "biggest drop-off":
+ * value_event → auth_started, 0% carried, hundreds lost. That finding was an
+ * artefact, not a result. A guest who reaches a nurse never signs up — the
+ * whole premise is that care comes before an account — so the signup stages
+ * are legitimately empty on the path that WORKS.
+ *
+ * Reported as a phantom, it would have pointed a clinic at fixing a signup
+ * form that nobody was supposed to reach. So the main path stops at
+ * escalation_sent, and account creation is reported separately as the optional
+ * branch it actually is.
+ */
+const MAIN_PATH = [
   "visitor",
   "conversation_started",
   "value_event",
-  "auth_started",
-  "consented",
-  "patient_created",
   "escalation_sent",
 ] as const;
+
+/** Optional. Entered only when someone chooses to create an account. */
+const ACCOUNT_BRANCH = ["auth_started", "consented", "patient_created"] as const;
+
+const ALL_STAGES = [...MAIN_PATH, ...ACCOUNT_BRANCH] as const;
 
 interface EventRow {
   event_type: string;
@@ -110,11 +127,12 @@ export async function GET(request: Request) {
   const funnels = [...byChannel.entries()]
     .map(([channel, stages]) => {
       const counts: Record<string, number> = {};
-      for (const s of FUNNEL_ORDER) counts[s] = stages.get(s)?.size ?? 0;
+      for (const s of ALL_STAGES) counts[s] = stages.get(s)?.size ?? 0;
 
-      const steps = FUNNEL_ORDER.slice(0, -1)
+      // Conversion is measured along the main path only.
+      const steps = MAIN_PATH.slice(0, -1)
         .map((from, i) => {
-          const to = FUNNEL_ORDER[i + 1];
+          const to = MAIN_PATH[i + 1];
           const a = counts[from];
           const b = counts[to];
           if (a === 0) return null;
@@ -134,6 +152,12 @@ export async function GET(request: Request) {
         entered,
         completed: finished,
         completion_rate: entered ? Number((finished / entered).toFixed(3)) : null,
+        // Reported, never mixed into the conversion figures above. Zero here
+        // means nobody chose to create an account — which on the guest path is
+        // the expected outcome, not a failure.
+        account_branch: Object.fromEntries(
+          ACCOUNT_BRANCH.map((s) => [s, counts[s]]),
+        ),
       };
     })
     .sort((a, b) => b.entered - a.entered);

@@ -309,15 +309,28 @@ def main():
     print(f"  escalations    {len(escalations)}")
 
     print("\nWriting…")
+    failed = False
     for name, rows in (
         ("lead_sessions", leads),
         ("guest_messages", messages),
         ("escalations", escalations),
         ("funnel_events", events),
     ):
-        for batch in chunked(rows):
-            request(url, key, name, batch)
-        print(f"  {name:<16} {len(rows)}")
+        written = 0
+        for batch in chunked(normalise(rows)):
+            if request(url, key, name, batch):
+                written += len(batch)
+        # Report what LANDED, not what was intended. The first version printed
+        # len(rows) regardless of outcome, so a table that took zero rows still
+        # reported a full write — total failure looked exactly like success.
+        if written != len(rows):
+            failed = True
+        note = "ok" if written == len(rows) else f"FAILED — {len(rows) - written} lost"
+        print(f"  {name:<16} {written}/{len(rows)}  {note}")
+
+    if failed:
+        print("\nSome rows did not land. The dashboard will under-report until fixed.")
+        sys.exit(1)
 
     print("\nDone. Now look at:")
     print("  /dashboard   funnel, drop-off, channels")

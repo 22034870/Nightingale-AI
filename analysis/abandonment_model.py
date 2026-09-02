@@ -265,7 +265,7 @@ def main():
 
     # ---- Does it fail unevenly? Same question the safety eval asks. ---------
     print("\nPer-channel error rates (are we wrong more often for some groups?)")
-    per_group = {}
+    per_group, group_n = {}, {}
     for ch in sorted(set(g_te)):
         mask = (g_te == ch).values
         if mask.sum() < 15:
@@ -273,15 +273,30 @@ def main():
         pred = (best["proba"][mask] >= 0.5).astype(int)
         acc = float((pred == y_te[mask]).mean())
         per_group[ch] = acc
+        group_n[ch] = int(mask.sum())
         print(f"  {ch:<22} n={mask.sum():<4} accuracy {acc:.3f}")
 
     ratio, worst, bestg = four_fifths(per_group)
+    verdict = "PASS" if ratio >= 0.8 else "FAIL"
+    # A ratio computed off a handful of rows is noise wearing a verdict's
+    # clothing. Reporting "FAIL" from n=16 would be the same overclaiming the
+    # rest of this project refuses, so the sample size qualifies the finding
+    # rather than hiding behind it.
+    smallest = min(group_n.values()) if group_n else 0
+    underpowered = smallest < 50
+    if underpowered:
+        verdict = f"{verdict}, UNDERPOWERED"
+
     if per_group:
-        verdict = "PASS" if ratio >= 0.8 else "FAIL"
         print(f"\nFour-fifths ratio: {ratio:.3f} ({verdict})")
+        if underpowered:
+            print(f"  Smallest group has n={smallest}. Below ~50 this ratio swings "
+                  f"wildly on a few rows — treat it as a flag to collect more data, "
+                  f"not as a measured disparity.")
         if ratio < 0.8:
-            print(f"  Worst: {worst} vs best: {bestg}. The model is materially "
-                  f"less reliable for {worst} — do not deploy against that group.")
+            print(f"  Worst: {worst} vs best: {bestg}. On this evidence the model "
+                  f"is less reliable for {worst} — do not deploy against that group "
+                  f"until the sample supports the claim either way.")
 
     # ---- What actually drives it -------------------------------------------
     imp = permutation_importance(
@@ -333,12 +348,18 @@ def main():
         "",
         "## Fairness",
         "",
-        f"Four-fifths ratio across channels: **{ratio:.3f}** "
-        f"({'PASS' if ratio >= 0.8 else 'FAIL'})",
+        f"Four-fifths ratio across channels: **{ratio:.3f}** ({verdict})",
         "",
     ]
+    if underpowered:
+        lines += [
+            f"> Smallest group has n={smallest}. Below roughly 50 this ratio swings",
+            "> wildly on a few rows — read it as a flag to collect more data, not as",
+            "> a measured disparity.",
+            "",
+        ]
     for ch, acc in sorted(per_group.items(), key=lambda kv: kv[1]):
-        lines.append(f"- `{ch}` — accuracy {acc:.3f}")
+        lines.append(f"- `{ch}` — accuracy {acc:.3f} (n={group_n[ch]})")
     lines += [
         "",
         "## What drives it",
