@@ -82,7 +82,25 @@ export default function ChatClient({ opening }: { opening: string }) {
   // state. A ref updates synchronously, so the second call sees it immediately.
   const inFlight = useRef(false);
   const endRef = useRef<HTMLDivElement>(null);
-  useEffect(() => endRef.current?.scrollIntoView({ behavior: "smooth" }), [messages]);
+  // BLOCK BODY IS LOAD-BEARING. Do not shorten this to a concise arrow.
+  //
+  // `useEffect(() => someCall(), deps)` returns whatever someCall returns, and
+  // React stores that as the effect's CLEANUP function. Chrome 152 began
+  // returning a scroll-completion Promise from scrollIntoView(), so React
+  // stored a Promise and then called it as cleanup on the first `messages`
+  // change — i.e. the first time anyone pressed Send.
+  //
+  // That throws in React's COMMIT phase, which is not recoverable by a render
+  // retry, so React tore down the entire root and Next.js swapped in its
+  // built-in global error page: "This page couldn't load". It looked exactly
+  // like a browser crash and was not one.
+  //
+  // tsc cannot catch this: lib.dom.d.ts still declares scrollIntoView(): void,
+  // and void is assignable to `void | Destructor`. React warns in development
+  // but the production build is silent. Guarded by tests/test_effect_cleanup.py.
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
   async function send() {
     const text = input.trim();
