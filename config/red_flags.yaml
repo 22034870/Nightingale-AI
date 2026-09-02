@@ -150,6 +150,13 @@ red_flags:
       - "dada sakit gila"
       - "sakit dada macam kena pijak"
       - "dada berat"
+      # Bahasa Indonesia. Found by eval/fairness_audit.py: RF_CARD_01 fired 8
+      # times in English and ZERO times on the identical Indonesian rows,
+      # because Indonesian uses "nyeri" where Malay uses "sakit".
+      - "nyeri dada"
+      - "dada nyeri"
+      - "nyeri di dada"
+      - "dada terasa berat"
 
   - id: RF_CARD_02
     system: cardiac
@@ -199,6 +206,14 @@ red_flags:
       - "susah bernafas"
       - "tak boleh nafas"
       - "tak dapat nafas"
+      # Bahasa Indonesia spells it "napas", Malay "nafas". A single letter, and
+      # it cost RF_RESP_01 every single Indonesian detection: 15 hits in
+      # English, 0 in Indonesian on the same clinical content.
+      - "sesak napas"
+      - "sulit bernapas"
+      - "susah bernapas"
+      - "tidak bisa bernapas"
+      - "napas pendek"
 
   # ---- NEUROLOGICAL -----------------------------------------------------
   - id: RF_NEURO_01
@@ -218,6 +233,10 @@ red_flags:
       - "muka jatuh sebelah"
       - "tangan kebas tak boleh angkat"
       - "tangan kebas tak boleh gerak"
+      # Bahasa Indonesia
+      - "wajah miring"
+      - "lumpuh sebelah"
+      - "separuh badan lemah"
 
   - id: RF_NEURO_02
     system: neurological
@@ -232,6 +251,10 @@ red_flags:
       - "cannot talk properly"
       - "tongue heavy"
       - "cakap pelat tiba-tiba"
+      # Bahasa Indonesia
+      - "bicara pelo"
+      - "sulit bicara"
+      - "tidak bisa bicara"
 
   - id: RF_NEURO_03
     system: neurological
@@ -270,6 +293,11 @@ red_flags:
       - "darah keluar banyak"
       - "turun darah banyak"
       - "tumpah darah"
+      # Bahasa Indonesia
+      - "pendarahan"
+      - "perdarahan"
+      - "pendarahan hebat"
+      - "darah terus keluar"
 
   - id: RF_OBS_01
     system: obstetric_gynaecological
@@ -363,6 +391,10 @@ red_flags:
       - "take all my pills"
       - "rasa nak mati"
       - "tak nak hidup"
+      # Bahasa Indonesia
+      - "ingin mati"
+      - "tidak ingin hidup"
+      - "ingin mengakhiri hidup"
       # Added after live testing: the two-layer merge caught "feeling more and
       # more hopeless and dont see the point" only because the model was up.
       # Phrasings this explicit must not depend on a network call.
@@ -420,6 +452,10 @@ red_flags:
       - "stomach pain cannot walk"
       - "sakit perut gila"
       - "sakit perut memulas sangat"
+      # Bahasa Indonesia
+      - "nyeri perut hebat"
+      - "nyeri perut sangat"
+      - "perut sakit sekali"
 
   - id: RF_TOR_01
     system: urological_gynaecological
@@ -540,6 +576,9 @@ clinical_signal:
     - symptom
     - symptoms
     - sakit
+    - nyeri        # Bahasa Indonesia for pain; Malay uses "sakit"
+    - napas        # Indonesian spelling; Malay is "nafas"
+    - bernapas
     - demam
     - darah
     - nafas
@@ -550,11 +589,15 @@ clinical_signal:
     - lemah
     - kebas
     - letih
-    # Care-seeking and clinical context
-    - doctor
-    - clinic
-    - hospital
-    - nurse
+    # Care-seeking and clinical context.
+    #
+    # NOTE what is deliberately ABSENT: doctor, clinic, hospital, nurse.
+    # Those are VENUE and ROLE words, not clinical signal - they say someone is
+    # talking about the clinic, not about a symptom. Including them meant
+    # "Where is the clinic and is there parking?" and "Do you have doctors who
+    # speak Mandarin?" both reached the fail-closed floor and escalated to a
+    # nurse. Found by eval/run_eval.py: 4 false alarms in 15 administrative
+    # questions, every one of them caused by these four words.
     - medication
     - medicine
     - tablet
@@ -569,7 +612,6 @@ clinical_signal:
     - scan
     - biopsy
     - ubat
-    - doktor
     - mengandung
     - hamil
     # Mental health. Deliberately NOT red flags - "this traffic is hopeless"

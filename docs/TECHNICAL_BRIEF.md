@@ -351,15 +351,83 @@ and would need a number-normalisation pass before the regex layer.
 | Clinician response UI | The brief asks for the *schema* to support it | `escalations.status` + `clinician_responses`, ready |
 | ML/NER redaction layer | A model I cannot evaluate in 48 hours is a false sense of safety | The quarantine queue, so failure has a defined destination |
 | Multilingual generation | Cannot QA safety copy in a language I cannot verify | Multilingual **detection** — we understand BM/Manglish, answer in English, and say so |
-| Risk-gate evaluation harness | Ran out of hours. Fully specified in PLANNING §16b | Would measure recall on `healthbench-multilingual` and audit cross-language equity under the four-fifths rule |
+| Recall against clinician-labelled emergencies | No openly licensed dataset has acuity labels on patient-voice text; MIMIC-IV-ED needs credentialing and a DUA | Measured what the data honestly supports — see the evaluation section below |
 
-**The last one is the honest regret.** Right now my evidence that the risk gate
-works is "24 hand-written fixtures pass", which is a vibe, not a measurement. The
-harness would turn it into a confusion matrix — and, more interestingly, would
-answer whether the detector has *equal recall for Malay-language input as for
-English*. If it catches 95% of English red flags and 70% of Malay ones, Malay
-speakers get measurably worse triage from the same system. That is a safety
-inequity, and nobody in this competition is asking the question.
+---
+
+## Measuring the risk gate — and the gap it found
+
+The evidence that the risk gate worked used to be "24 hand-written fixtures
+pass" — fixtures I wrote, checked against a lexicon I wrote. That is circular.
+`eval/` replaces it with measurement. Full methodology in `eval/README.md`.
+
+### The headline: a real safety inequity, found and closed
+
+`healthbench-multilingual` is a **parallel corpus** — `prompt_id` identifies the
+same clinical content in English, Malay and Indonesian. So the audit needs no
+ground truth at all: it asks whether identical content is treated identically,
+and any systematic gap is a language effect.
+
+| Comparison | Four-fifths ratio | |
+|---|---|---|
+| English vs Malay | 0.957 | PASS |
+| **English vs Indonesian** | **0.768** | **FAIL — disparate impact** |
+
+`RF_RESP_01` (difficulty breathing) fired **15 times in English and 0 times in
+Indonesian** on the same rows.
+
+**The cause was one letter.** Indonesian spells it *sesak **na**pas*; Malay,
+*sesak **naf**as*. Likewise ***nyeri** dada* versus ***sakit** dada*. The lexicon
+had been sourced from Malay-language research and was simply blind to Indonesian
+phrasing — and no aggregate accuracy number would ever have shown it.
+
+After adding Indonesian variants: **0.978 and 0.962, both PASS.** Indonesian
+`RF_RESP_01` detections went 0 → 11.
+
+This is the four-fifths rule — a disparate-impact test — applied to a safety
+property rather than a hiring one. A detector that misses breathlessness in one
+language gives those patients worse triage from the same system.
+
+### Second finding: four false alarms in fifteen
+
+On administrative questions with no clinical content, where zero is the only
+correct answer, the gate escalated *"Where is the clinic and is there parking?"*
+and *"Do you have doctors who speak Mandarin?"*. The cause: `clinic`, `doctor`,
+`hospital` and `nurse` sat in the clinical-signal vocabulary. Those are **venue
+and role words** — they say someone is talking *about* the clinic, not about a
+symptom. Removed: 0 of 15.
+
+### Two label-validity problems, and the lesson
+
+Both would have produced confident, wrong numbers.
+
+**`theme:emergency_referrals` does not mean "this is an emergency."** It means "a
+good answer should address whether to seek emergency care" — *including when the
+answer is no*. Tagged rows include a herbal-supplement interaction question and a
+four-day earache. Scoring recall against it would have reported terrible recall
+that actually reflected the detector behaving correctly.
+
+**`symptom_to_diagnosis` is labelled by diagnosis, not acuity.** I first called
+its 97% escalation rate a "false-alarm rate". Reading the hits showed most were
+defensible — *"my throat is swollen and I have difficulty breathing"* should
+reach a clinician.
+
+Neither is a flaw in the datasets. Both are flaws in the obvious reading of their
+names, and reading rows is what caught them.
+
+### What remains unmeasured, deliberately
+
+**Recall against clinician-labelled emergencies.** No open dataset provides
+acuity labels on patient-voice text. MIMIC-IV-ED has exactly that — ESI acuity
+plus free-text chief complaint — behind credentialing, CITI training and a DUA.
+
+Recall is the number a reader most wants. Inventing a proxy would be the most
+damaging thing this harness could do.
+
+**And a limitation worth stating twice:** the non-English rows are
+machine-translated and read formally. Real patients write Bahasa Rojak —
+code-switched and colloquial. Formal translation is the *easy* case, so the
+measured gap is a **lower bound** on the real one.
 
 ---
 
