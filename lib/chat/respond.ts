@@ -289,21 +289,33 @@ THIS TURN IS FLAGGED MEDIUM RISK. Give NO clinical information of any kind, not 
   const system = SYSTEM_PROMPT.replace("{CLINIC}", clinic.name) + mediumConstraint;
   const timeoutMs = Number(process.env.CHAT_TIMEOUT_MS ?? 10000);
   // Quota is metered PER MODEL, so an exhausted primary does not mean an
-  // exhausted account. Falling back to a smaller model degrades answer quality
-  // but keeps the conversation alive, which is strictly better than serving
-  // generic fallback copy to someone mid-sentence. Discovered the hard way:
-  // the free tier allows 20 requests/day/model, and one five-turn conversation
-  // spends most of that.
-  const primaryModel = process.env.CHAT_MODEL ?? "gemini-3.5-flash";
-  const fallbackModel = process.env.CHAT_MODEL_FALLBACK ?? "gemini-3.5-flash-lite";
-  let model = primaryModel;
+  // exhausted account. The chain is tried in order on quota errors, which keeps
+  // the conversation alive instead of serving generic copy to someone
+  // mid-sentence.
+  //
+  // This matters more than it first appears. The free tier allows 5 requests
+  // PER MINUTE on gemini-3.5-flash, and a single turn makes three model calls
+  // (classifier, extraction, chat) — so one person typing quickly exhausts the
+  // primary within a minute. Measured 2026-09-02: 3.5-flash 5.4s under
+  // contention, 3-flash-preview 1.4s with headroom.
+  const modelChain = (process.env.CHAT_MODEL_CHAIN ??
+    [process.env.CHAT_MODEL ?? "gemini-3.5-flash",
+     "gemini-3-flash-preview",
+     process.env.CHAT_MODEL_FALLBACK ?? "gemini-3.5-flash-lite"].join(","))
+    .split(",").map((m) => m.trim()).filter(Boolean);
+
+  let modelIndex = 0;
+  let model = modelChain[0];
   let modelDowngraded = false;
 
   let reply: string | null = null;
   let guardAudit: Record<string, unknown> = {};
   let modelAudit: Record<string, unknown> = {};
 
-  for (let attempt = 0; attempt < 2 && reply === null; attempt++) {
+  const maxIterations = 2 + modelChain.length;
+  for (let attempt = 0, iterations = 0;
+       attempt < 2 && reply === null && iterations < maxIterations;
+       attempt++, iterations++) {
     try {
       const result = await generate({
         model,
@@ -326,12 +338,13 @@ THIS TURN IS FLAGGED MEDIUM RISK. Give NO clinical information of any kind, not 
     } catch (err) {
       if (!(err instanceof LlmUnavailable)) throw err;
 
-      // Quota exhaustion on the primary is recoverable: try the smaller model
-      // once before giving up on generation entirely.
-      if (err.reason === "quota" && model === primaryModel) {
-        model = fallbackModel;
+      // Quota exhaustion is recoverable: walk down the chain before giving up
+      // on generation entirely.
+      if (err.reason === "quota" && modelIndex < modelChain.length - 1) {
+        modelIndex += 1;
+        model = modelChain[modelIndex];
         modelDowngraded = true;
-        attempt--; // this attempt did not produce a draft to judge
+        attempt--; // this attempt produced no draft to judge
         continue;
       }
       modelAudit = { unavailable: `${err.reason}: ${err.message}` };
@@ -364,6 +377,8 @@ THIS TURN IS FLAGGED MEDIUM RISK. Give NO clinical information of any kind, not 
       chunks_retrieved: chunks.length,
       chat_model: modelAudit,
       model_downgraded: modelDowngraded,
+      model_chain: modelChain,
+      model_used_index: modelIndex,
       guard: guardAudit,
     },
   };

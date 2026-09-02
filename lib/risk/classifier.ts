@@ -69,7 +69,15 @@ export async function classifyWithLlm(
   recentContext?: string[],
 ): Promise<ClassifierResult> {
   const timeoutMs = Number(process.env.RISK_CLASSIFY_TIMEOUT_MS ?? 3000);
-  const model = process.env.RISK_MODEL ?? "gemini-3.5-flash-lite";
+
+  // Same chain reasoning as the chat path. The classifier runs on EVERY
+  // message, so it is the first thing to hit a per-minute limit — and the layer
+  // we least want to lose, since losing it means falling back to medium on
+  // anything carrying clinical signal.
+  const chain = (process.env.RISK_MODEL_CHAIN ??
+    [process.env.RISK_MODEL ?? "gemini-3.5-flash-lite",
+     "gemini-3-flash-preview"].join(","))
+    .split(",").map((m) => m.trim()).filter(Boolean);
 
   const prompt = [
     recentContext?.length
@@ -80,16 +88,29 @@ export async function classifyWithLlm(
     .filter(Boolean)
     .join("\n");
 
-  const result = await generate({
-    model,
-    system: SYSTEM_PROMPT,
-    prompt,
-    timeoutMs,
-    temperature: 0,
-    maxOutputTokens: 256,
-    responseSchema: RISK_SCHEMA,
-    // No thinkingBudget — flash-lite rejects it.
-  });
+  let result;
+  let lastError: unknown;
+  for (const model of chain) {
+    try {
+      result = await generate({
+        model,
+        system: SYSTEM_PROMPT,
+        prompt,
+        timeoutMs,
+        temperature: 0,
+        maxOutputTokens: 256,
+        responseSchema: RISK_SCHEMA,
+        // thinkingConfig only where the model accepts it; flash-lite 400s on it.
+        ...(model.includes("lite") ? {} : { thinkingBudget: 0 }),
+      });
+      break;
+    } catch (err) {
+      lastError = err;
+      if (err instanceof LlmUnavailable && err.reason === "quota") continue;
+      throw err;
+    }
+  }
+  if (!result) throw lastError;
 
   const parsed = parseJsonResponse<{
     risk_level: "low" | "medium" | "high";
