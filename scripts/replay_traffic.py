@@ -136,10 +136,10 @@ def request(url, key, table, rows=None, method="POST", query=""):
     )
     try:
         with urllib.request.urlopen(req, timeout=60) as r:
-            return r.status
+            return r.status < 300
     except urllib.error.HTTPError as e:
         print(f"  ! {table}: HTTP {e.code} {e.read().decode()[:180]}")
-        return e.code
+        return False
 
 
 def weighted(mapping):
@@ -176,7 +176,7 @@ def build(sessions: int, days: int):
             "identity_level": identity,
             "landing_timestamp": started.isoformat(),
             "expires_at": (started + timedelta(days=7)).isoformat(),
-            "recovery_token": uuid.uuid4().hex,
+            "recovery_token": f"synthetic_{uuid.uuid4().hex}",
         })
 
         meta = {
@@ -253,6 +253,20 @@ def build(sessions: int, days: int):
     return leads, messages, events, escalations
 
 
+def normalise(rows):
+    """Give every row the same keys.
+
+    PostgREST rejects a bulk insert whose objects differ in shape — "All object
+    keys must match" — and these rows legitimately differ: value_event_id is set
+    only on value events. Missing keys become explicit nulls so the column
+    default is not silently relied upon.
+    """
+    keys = set()
+    for r in rows:
+        keys.update(r)
+    return [{k: r.get(k) for k in keys} for r in rows]
+
+
 def chunked(rows, size=200):
     for i in range(0, len(rows), size):
         yield rows[i : i + size]
@@ -281,10 +295,11 @@ def main():
                 query="?acquisition_context_json->>synthetic=eq.true")
         request(url, key, "funnel_events", method="DELETE",
                 query="?metadata_json->>synthetic=eq.true")
-        # lead_sessions and guest_messages carry no synthetic marker of their
-        # own, so they are LEFT IN PLACE rather than deleted by guesswork. Both
-        # expire on the 7-day retention schedule. Saying so beats a wipe that
-        # quietly misses half the rows.
+        # lead_sessions are tagged by a recovery_token prefix — an indexed
+        # column that already exists — so generated sessions can be removed
+        # exactly, without guesswork. guest_messages cascade from them.
+        request(url, key, "lead_sessions", method="DELETE",
+                query="?recovery_token=like.synthetic_*")
 
     leads, messages, events, escalations = build(args.sessions, args.days)
     print(f"Generated {args.sessions} sessions over {args.days} days:")

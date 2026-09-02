@@ -288,10 +288,10 @@ create table escalations (
 );
 create index on escalations(patient_id, created_at desc);
 create index on escalations(lead_session_id);
--- An escalation must identify someone; nullable patient_id must not become
--- a way to file an anonymous, unactionable ticket.
-alter table escalations add constraint escalations_identifies_someone
-  check (patient_id is not null or lead_session_id is not null);
+-- An escalation must identify someone, but that is enforced at INSERT rather
+-- than by a CHECK. lead_session_id goes null when the retention job erases the
+-- conversation at 7 days; a CHECK here would refuse that delete and keep
+-- personal data past its consented life. See db/migrations/002.
 create index on escalations(status) where status in ('sent','acknowledged');
 
 -- Reserved for the clinician module that attaches later. No migration needed.

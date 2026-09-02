@@ -53,6 +53,51 @@ export interface PersistResult {
  * point at — so provenance written by the History Engine resolves to a real row
  * rather than a UUID that exists only in memory.
  */
+/**
+ * Get a lead session id, creating one if the caller did not supply it.
+ *
+ * WHY THIS EXISTS RATHER THAN A 400
+ * ---------------------------------
+ * An escalation must identify someone, or a clinician receives a concern with
+ * no route back to the person who raised it. The obvious enforcement is to
+ * reject the request — but the caller here is someone in distress pressing
+ * "Send to a nurse", and answering them with a validation error because the
+ * client omitted a field is the worst possible moment to be strict.
+ *
+ * So the invariant is satisfied by CONSTRUCTION instead. A session is minted,
+ * the escalation has something to hang off, and the conversation has somewhere
+ * to be written. Nothing is asked of the patient.
+ *
+ * Returns undefined if the database is unavailable; the caller then reports
+ * persisted:false honestly rather than claiming a delivery that did not happen.
+ */
+export async function ensureLeadSession(
+  clinicId: string,
+  existing?: string,
+  attribution?: Record<string, unknown>,
+): Promise<string | undefined> {
+  if (existing) return existing;
+
+  const result = await tryPersist("lead_session", async (db) => {
+    const { data, error } = await db
+      .from("lead_sessions")
+      .insert({
+        clinic_id: clinicId,
+        source_channel: (attribution?.source_channel as string) ?? "unknown",
+        campaign_id: (attribution?.campaign_id as string) ?? null,
+        // Anonymous unless the caller says otherwise. Escalating does not
+        // identify anyone, and must not be recorded as though it did.
+        identity_level: "anonymous",
+      })
+      .select("id")
+      .single();
+    if (error) throw new Error(error.message);
+    return data.id as string;
+  });
+
+  return result.ok ? result.data : undefined;
+}
+
 export async function persistTurn(input: PersistTurnInput): Promise<PersistResult> {
   const { clinicId, leadSessionId, patientSessionId, turn } = input;
   const guest = !patientSessionId;

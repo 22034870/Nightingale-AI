@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { respondToTurn, escalationPayload } from "@/lib/chat/respond";
 import { tryPersist } from "@/lib/db/client";
+import { ensureLeadSession } from "@/lib/db/persist";
 import { logEvent } from "@/lib/funnel/events";
 import { loadChannelRules, timeOfDay } from "@/lib/channels/rules";
 import type { MemoryItem } from "@/lib/history/profile";
@@ -35,7 +36,23 @@ export async function POST(request: Request) {
 
   const clinicId =
     typeof body.clinicId === "string" ? body.clinicId : "00000000-0000-0000-0000-000000000001";
-  const leadSessionId = typeof body.leadSessionId === "string" ? body.leadSessionId : undefined;
+  const patientId = typeof body.patientId === "string" ? body.patientId : undefined;
+  const attribution = (body.attribution ?? {}) as Record<string, unknown>;
+
+  // An escalation must identify SOMEONE, or a clinician receives a concern with
+  // no route back to the person who raised it. Satisfied by construction rather
+  // than by rejecting the request — see ensureLeadSession. The invariant is not
+  // a database CHECK because lead_session_id legitimately goes null later, when
+  // retention erases the conversation (db/migrations/002).
+  const leadSessionId = patientId
+    ? typeof body.leadSessionId === "string"
+      ? body.leadSessionId
+      : undefined
+    : await ensureLeadSession(
+        clinicId,
+        typeof body.leadSessionId === "string" ? body.leadSessionId : undefined,
+        attribution,
+      );
 
   const turn = await respondToTurn(body.text, {
     history: Array.isArray(body.history) ? (body.history as string[]) : [],
@@ -58,7 +75,7 @@ export async function POST(request: Request) {
     const { data, error } = await db
       .from("escalations")
       .insert({
-        patient_id: typeof body.patientId === "string" ? body.patientId : null,
+        patient_id: patientId ?? null,
         // A real column, not a JSON key. patient_id is null for a guest, and
         // this is then the only route from the escalation back to what was
         // actually said — see db/migrations/001_guest_escalations.sql.
@@ -82,8 +99,6 @@ export async function POST(request: Request) {
     if (error) throw new Error(error.message);
     return data.id as string;
   });
-
-  const attribution = (body.attribution ?? {}) as Record<string, unknown>;
 
   await logEvent({
     clinicId,
