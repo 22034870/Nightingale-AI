@@ -274,5 +274,6 @@ you justified. Full reasoning in [PLANNING.md](PLANNING.md) §3c.
 
 - [PLANNING.md](PLANNING.md) — decisions, cuts, and where I disagree with the brief
 - [docs/TECHNICAL_BRIEF.md](docs/TECHNICAL_BRIEF.md) — architecture, schema, ethics matrix
+- [docs/system-brief.html](docs/system-brief.html) — illustrated overview: request lifecycle, the roles of Supabase and Vercel, and where the machine-learning methodology was applied. Open it in a browser
 - [research/FINDINGS.md](research/FINDINGS.md) — research digest and its corrections
 - [ATTRIBUTION.txt](ATTRIBUTION.txt) — libraries, models, licences

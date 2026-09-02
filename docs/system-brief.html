@@ -1,0 +1,718 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Inside Nightingale</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+<style>
+  /* ---- Light palette: complete, on bare :root ---- */
+  :root {
+    --ground:      #F6F9F8;
+    --surface:     #FFFFFF;
+    --surface-alt: #EFF4F3;
+    --ink:         #0E1E1C;
+    --ink-soft:    #334744;
+    --muted:       #5C6E6B;
+    --rule:        #D5E0DE;
+    --rule-soft:   #E6EDEC;
+    --accent:      #0E6F69;
+    --accent-deep: #0A4F4B;
+    --accent-soft: #DCEAE8;
+    --high:        #A93226;
+    --high-bg:     #F8E7E4;
+    --med:         #8A5F10;
+    --med-bg:      #F7EEDA;
+    --low:         #556965;
+    --low-bg:      #E9EFEE;
+    --shadow:      0 1px 2px rgba(14,30,28,.05), 0 8px 24px -16px rgba(14,30,28,.28);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:      #0B1413;
+      --surface:     #121D1C;
+      --surface-alt: #172423;
+      --ink:         #E6EFED;
+      --ink-soft:    #B4C6C3;
+      --muted:       #8CA09C;
+      --rule:        #243634;
+      --rule-soft:   #1B2A29;
+      --accent:      #4FB6AE;
+      --accent-deep: #8DD6CF;
+      --accent-soft: #16302E;
+      --high:        #E8897C;
+      --high-bg:     #33201D;
+      --med:         #D6AC63;
+      --med-bg:      #2E2617;
+      --low:         #9AAFAB;
+      --low-bg:      #1B2A29;
+      --shadow:      0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:      #0B1413;
+    --surface:     #121D1C;
+    --surface-alt: #172423;
+    --ink:         #E6EFED;
+    --ink-soft:    #B4C6C3;
+    --muted:       #8CA09C;
+    --rule:        #243634;
+    --rule-soft:   #1B2A29;
+    --accent:      #4FB6AE;
+    --accent-deep: #8DD6CF;
+    --accent-soft: #16302E;
+    --high:        #E8897C;
+    --high-bg:     #33201D;
+    --med:         #D6AC63;
+    --med-bg:      #2E2617;
+    --low:         #9AAFAB;
+    --low-bg:      #1B2A29;
+    --shadow:      0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: "Source Serif 4", Georgia, "Times New Roman", serif;
+    font-size: 17px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 28px 96px; }
+
+  /* ---- Masthead ---- */
+  header.masthead {
+    border-bottom: 2px solid var(--ink);
+    padding: 64px 0 26px;
+    margin-bottom: 44px;
+  }
+  .kicker {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11.5px; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--accent); margin: 0 0 18px;
+  }
+  h1 {
+    font-family: Archivo, "Helvetica Neue", Arial, sans-serif;
+    font-weight: 700; font-size: clamp(2.6rem, 6.5vw, 4.1rem);
+    letter-spacing: -.032em; line-height: 1.02; margin: 0;
+    text-wrap: balance;
+  }
+  .standfirst {
+    margin: 20px 0 0; max-width: 62ch;
+    font-size: 1.15rem; color: var(--ink-soft);
+  }
+  .meta {
+    display: flex; flex-wrap: wrap; gap: 10px 28px; margin-top: 26px;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11.5px; letter-spacing: .06em; color: var(--muted);
+    text-transform: uppercase;
+  }
+  .meta a { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--accent-soft); }
+  .meta a:hover { border-bottom-color: var(--accent); }
+
+  /* ---- Sections ---- */
+  section { margin-top: 60px; }
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11px; letter-spacing: .16em; text-transform: uppercase;
+    color: var(--muted); margin: 0 0 10px;
+  }
+  h2 {
+    font-family: Archivo, "Helvetica Neue", Arial, sans-serif;
+    font-weight: 600; font-size: clamp(1.5rem, 3.1vw, 2rem);
+    letter-spacing: -.02em; line-height: 1.14; margin: 0 0 18px;
+    text-wrap: balance;
+  }
+  h3 {
+    font-family: Archivo, "Helvetica Neue", Arial, sans-serif;
+    font-weight: 600; font-size: 1.06rem; letter-spacing: -.008em;
+    margin: 30px 0 8px; color: var(--ink);
+  }
+  p { margin: 0 0 16px; max-width: 68ch; }
+  .lede { font-size: 1.06rem; color: var(--ink-soft); }
+  strong { font-weight: 600; }
+  em.term { font-style: italic; color: var(--accent-deep); }
+
+  code {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: .845em; background: var(--surface-alt);
+    padding: .12em .38em; border-radius: 3px; color: var(--ink-soft);
+  }
+
+  /* ---- Pipeline: a genuine sequence, so it is numbered ---- */
+  .pipeline { list-style: none; padding: 0; margin: 26px 0 0; position: relative; }
+  .pipeline::before {
+    content: ""; position: absolute; left: 17px; top: 12px; bottom: 12px;
+    width: 2px; background: var(--rule);
+  }
+  .pipeline li {
+    position: relative; padding: 0 0 22px 54px; max-width: 70ch;
+  }
+  .pipeline .num {
+    position: absolute; left: 0; top: 0;
+    width: 36px; height: 36px; border-radius: 50%;
+    background: var(--surface); border: 2px solid var(--rule);
+    color: var(--accent); font-family: "IBM Plex Mono", monospace;
+    font-size: 13px; font-weight: 500;
+    display: grid; place-items: center;
+  }
+  .pipeline li.gate .num { border-color: var(--accent); background: var(--accent-soft); }
+  .pipeline h4 {
+    font-family: Archivo, sans-serif; font-weight: 600; font-size: 1rem;
+    margin: 6px 0 4px; letter-spacing: -.005em;
+  }
+  .pipeline p { font-size: .95rem; margin: 0; color: var(--ink-soft); }
+
+  /* ---- Cards / grids ---- */
+  .grid { display: grid; gap: 18px; margin-top: 24px; }
+  .grid.two { grid-template-columns: repeat(auto-fit, minmax(288px, 1fr)); }
+  .grid.three { grid-template-columns: repeat(auto-fit, minmax(212px, 1fr)); }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--rule);
+    border-radius: 4px; padding: 20px 22px; box-shadow: var(--shadow);
+  }
+  .card h3 { margin-top: 0; }
+  .card p:last-child { margin-bottom: 0; }
+  .card p { font-size: .95rem; }
+
+  .stat { background: var(--surface); border: 1px solid var(--rule); border-radius: 4px; padding: 16px 18px; }
+  .stat .n {
+    font-family: Archivo, sans-serif; font-weight: 700;
+    font-size: 1.85rem; letter-spacing: -.03em; line-height: 1;
+    font-variant-numeric: tabular-nums; color: var(--ink);
+  }
+  .stat .l {
+    font-family: "IBM Plex Mono", monospace; font-size: 10.5px;
+    letter-spacing: .1em; text-transform: uppercase; color: var(--muted);
+    margin-top: 7px; display: block;
+  }
+
+  /* ---- Tables ---- */
+  .scroll { overflow-x: auto; margin: 22px 0; border: 1px solid var(--rule); border-radius: 4px; background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; font-size: .92rem; min-width: 480px; }
+  th, td { text-align: left; padding: 11px 16px; border-bottom: 1px solid var(--rule-soft); vertical-align: top; }
+  thead th {
+    font-family: "IBM Plex Mono", monospace; font-size: 10.5px;
+    letter-spacing: .1em; text-transform: uppercase; color: var(--muted);
+    background: var(--surface-alt); border-bottom: 1px solid var(--rule);
+    font-weight: 500;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  td.num { font-variant-numeric: tabular-nums; font-family: "IBM Plex Mono", monospace; font-size: .86rem; }
+
+  /* ---- Severity chips ---- */
+  .chip {
+    display: inline-block; font-family: "IBM Plex Mono", monospace;
+    font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+    padding: 3px 8px; border-radius: 3px; font-weight: 500; white-space: nowrap;
+  }
+  .chip.high { background: var(--high-bg); color: var(--high); }
+  .chip.med  { background: var(--med-bg);  color: var(--med); }
+  .chip.low  { background: var(--low-bg);  color: var(--low); }
+
+  /* ---- Pull quote / principle ---- */
+  .principle {
+    border-left: 3px solid var(--accent); padding: 4px 0 4px 22px;
+    margin: 30px 0; max-width: 62ch;
+  }
+  .principle p {
+    font-family: Archivo, sans-serif; font-weight: 500;
+    font-size: 1.16rem; line-height: 1.42; letter-spacing: -.014em;
+    color: var(--ink); margin: 0;
+  }
+  .principle cite {
+    display: block; margin-top: 9px; font-style: normal;
+    font-family: "IBM Plex Mono", monospace; font-size: 10.5px;
+    letter-spacing: .1em; text-transform: uppercase; color: var(--muted);
+  }
+
+  /* ---- Callout ---- */
+  .note {
+    background: var(--surface-alt); border: 1px solid var(--rule);
+    border-radius: 4px; padding: 18px 20px; margin: 24px 0; max-width: 72ch;
+  }
+  .note p { font-size: .95rem; margin-bottom: 10px; }
+  .note p:last-child { margin-bottom: 0; }
+  .note .label {
+    font-family: "IBM Plex Mono", monospace; font-size: 10.5px;
+    letter-spacing: .12em; text-transform: uppercase; color: var(--accent);
+    display: block; margin-bottom: 8px;
+  }
+
+  ul.plain { padding-left: 20px; margin: 0 0 16px; max-width: 68ch; }
+  ul.plain li { margin-bottom: 7px; }
+
+  footer {
+    margin-top: 72px; padding-top: 22px; border-top: 1px solid var(--rule);
+    font-family: "IBM Plex Mono", monospace; font-size: 11px;
+    letter-spacing: .06em; color: var(--muted); text-transform: uppercase;
+  }
+
+  a { color: var(--accent); }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+  @media (max-width: 640px) {
+    body { font-size: 16px; }
+    .wrap { padding: 0 20px 72px; }
+    header.masthead { padding-top: 44px; }
+  }
+</style>
+<style>
+  /* Reset the Artifact host would otherwise supply. */
+  html { color-scheme: light dark; }
+  body { margin: 0; }
+  img { max-width: 100%; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="kicker">System brief · September 2026</p>
+    <h1>Inside Nightingale</h1>
+    <p class="standfirst">
+      A first-touch-to-care system for Malaysian private clinics. A stranger with a
+      frightening symptom gets real help in seconds without giving up their name —
+      and when they choose to be known, nothing they said is lost and nothing
+      unsafe is hidden.
+    </p>
+    <div class="meta">
+      <span>Jason Ong Yann Jing</span>
+      <span>Sunway University · Data Analytics</span>
+      <a href="https://nightingale-ai-drab.vercel.app">nightingale-ai-drab.vercel.app</a>
+    </div>
+  </header>
+
+  <section>
+    <p class="eyebrow">The premise</p>
+    <h2>Asking is not diagnosing</h2>
+    <p class="lede">
+      Most clinic chatbots answer questions and try very hard not to diagnose.
+      Nightingale inverts that. It <strong>asks the questions a clinician would
+      ask</strong> — and stops there.
+    </p>
+    <p>
+      &ldquo;Does the pain spread to your arm?&rdquo; gathers a fact.
+      &ldquo;That suggests cardiac ischaemia&rdquo; draws a conclusion. The system
+      does the first and hard-blocks the second, which leaves the conclusion with
+      the clinician — exactly where the Medical Act 1971 puts it.
+    </p>
+    <p>
+      That single decision pays off four ways. It is non-diagnostic by
+      construction rather than by instruction. The questioning <em class="term">is</em>
+      the value the guest receives, so there is no dead air while the system
+      &ldquo;collects information&rdquo;. It produces a structured record a nurse can
+      act on instead of a chat transcript. And it gives a frightened person a
+      bounded task rather than an open-ended interrogation.
+    </p>
+
+    <div class="principle">
+      <p>A confirmation is a promise. Only make it if the write happened.</p>
+      <cite>lib &mdash; the rule that governs every success path in the product</cite>
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">Scale</p>
+    <h2>What is actually built</h2>
+    <div class="grid three">
+      <div class="stat"><span class="n">14</span><span class="l">API routes</span></div>
+      <div class="stat"><span class="n">19</span><span class="l">Postgres tables</span></div>
+      <div class="stat"><span class="n">23</span><span class="l">RLS policies</span></div>
+      <div class="stat"><span class="n">103</span><span class="l">Automated tests</span></div>
+      <div class="stat"><span class="n">171</span><span class="l">Red-flag phrases</span></div>
+      <div class="stat"><span class="n">54</span><span class="l">Banned phrases</span></div>
+    </div>
+    <p style="margin-top:22px">
+      Four surfaces sit on top of that: a patient chat, an inbound Telegram bot,
+      a clinician triage queue, and an analytics dashboard. The last two are
+      password-gated; the first two are deliberately open, because someone in
+      distress must never meet a login screen.
+    </p>
+  </section>
+
+  <section>
+    <p class="eyebrow">Request lifecycle · in order</p>
+    <h2>What happens when someone types one sentence</h2>
+    <p>
+      This is the part that makes it a system rather than a wrapper around a
+      language model. Nine stages run on every message, and only two of them
+      involve the model at all.
+    </p>
+
+    <ol class="pipeline">
+      <li>
+        <span class="num">1</span>
+        <h4>Redaction</h4>
+        <p>Names, NRIC and passport numbers, phone numbers and emails are stripped
+        before anything else sees the text. Recall is biased over precision: it
+        would rather over-redact than let an identifier through. Validation acts as
+        a confidence signal, never a gate — an NRIC that fails its checksum is still
+        redacted.</p>
+      </li>
+      <li class="gate">
+        <span class="num">2</span>
+        <h4>Deterministic risk gate</h4>
+        <p>16 rules and 171 phrase variants across English, Malay, Indonesian and
+        Manglish. Runs before the model and never depends on a network call.
+        Context guards handle negation, third-party mentions and historical framing,
+        each with a hard floor so &ldquo;my father had chest pain&rdquo; cannot be
+        talked down to nothing.</p>
+      </li>
+      <li>
+        <span class="num">3</span>
+        <h4>Model classification</h4>
+        <p>A second opinion from the LLM, running in parallel with the reply.</p>
+      </li>
+      <li class="gate">
+        <span class="num">4</span>
+        <h4>Merge — the safety property</h4>
+        <p>The final level is <code>MAX(deterministic, model)</code>. The model can
+        raise the risk level. It can never lower it. If the model is unreachable,
+        rate-limited or wrong, the deterministic floor still holds.</p>
+      </li>
+      <li>
+        <span class="num">5</span>
+        <h4>Grounded reply</h4>
+        <p>Generated against 44 chunks of clinic corpus with character offsets
+        preserved, so a citation resolves to a real span rather than a plausible
+        paraphrase.</p>
+      </li>
+      <li class="gate">
+        <span class="num">6</span>
+        <h4>Output guard</h4>
+        <p>54 banned phrases across 6 categories, checked <em class="term">after</em>
+        generation. The prompt is a request; this is the enforcement. A model that
+        ignores its instructions still cannot ship a diagnosis.</p>
+      </li>
+      <li>
+        <span class="num">7</span>
+        <h4>History engine</h4>
+        <p>Six complaint frames — pain uses SOCRATES — each field carrying a stated
+        reason for being asked. Only <span class="chip high">high</span> risk halts
+        the checklist; medium continues, because a medium-risk halt made the system
+        repeat one sentence for five turns.</p>
+      </li>
+      <li>
+        <span class="num">8</span>
+        <h4>Persistence</h4>
+        <p>Redacted text only. The placeholder-to-original map is deliberately never
+        stored, which means a saved message cannot be un-redacted later, by anyone.
+        That costs a clinician some detail and is the correct trade.</p>
+      </li>
+      <li>
+        <span class="num">9</span>
+        <h4>Funnel event</h4>
+        <p>A PHI-free row describing what happened, not what was said. This is what
+        the dashboard reads, and why funnel data can be kept 30 days while guest
+        conversations are destroyed at 7.</p>
+      </li>
+    </ol>
+  </section>
+
+  <section>
+    <p class="eyebrow">Infrastructure</p>
+    <h2>Supabase and Vercel, and why the split matters</h2>
+
+    <div class="grid two">
+      <div class="card">
+        <h3>Supabase — the enforcement boundary</h3>
+        <p>
+          Supabase is managed Postgres, and it is doing considerably more than
+          storage. The access rules live <strong>inside the database</strong> as 23
+          Row Level Security policies, default-deny.
+        </p>
+        <p>
+          That distinction is the whole point. An application-level check is
+          something a future route can forget to call. An RLS policy is something
+          no route can bypass, because the refusal happens in Postgres. The
+          access-control tests authenticate as a patient and query the database
+          <em class="term">directly</em> — if RLS were removed, every route could
+          still look correct and those tests would fail immediately.
+        </p>
+        <p>
+          It also holds the append-only living profile (facts supersede, never
+          overwrite), the guest-to-patient conversion path, and the 7-day retention
+          schedule for guest data.
+        </p>
+      </div>
+
+      <div class="card">
+        <h3>Vercel — the runtime and the gate</h3>
+        <p>
+          Vercel hosts the Next.js application: 14 serverless API routes, four
+          pages, and the edge proxy that runs before any of them.
+        </p>
+        <p>
+          That proxy is where staff authentication happens. It gates
+          <code>/dashboard</code> and <code>/clinician</code> — and, critically,
+          the API routes behind them. Gating the page while leaving
+          <code>/api/analytics</code> open would be theatre: same data, one fetch
+          away from anyone reading the page source.
+        </p>
+        <p>
+          Vercel also holds the secrets. The <code>service_role</code> key lives
+          only in server environment variables; it bypasses RLS entirely, so it
+          must never reach a browser. The public anon key is safe there by design,
+          because RLS is what actually restricts it.
+        </p>
+      </div>
+    </div>
+
+    <div class="note">
+      <span class="label">Why two keys, not one</span>
+      <p>
+        The browser gets the anon key and sees only what policy allows. The server
+        gets the service key and sees everything. If those were the same key, every
+        RLS policy in the schema would be decoration. The naming rule matters too:
+        a <code>NEXT_PUBLIC_</code> prefix ships a variable to the browser, so
+        prefixing the service key would silently publish the master key to every
+        visitor.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">Beyond the dashboard</p>
+    <h2>What the system does</h2>
+
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr><th>Surface</th><th>Who it serves</th><th>What it does</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Patient chat</strong></td>
+            <td>Anyone, no account</td>
+            <td>Grounded answers, clinician-style history taking, honest escalation with a computed response time</td>
+          </tr>
+          <tr>
+            <td><strong>Telegram bot</strong></td>
+            <td>Anyone, no account</td>
+            <td>The same safety pipeline on a channel people already have open. Platform-enforced user initiation means it can never cold-message</td>
+          </tr>
+          <tr>
+            <td><strong>Triage queue</strong></td>
+            <td>Nurse / clinician</td>
+            <td>Sorted by clinical risk, then waiting time — never by lead value. Opens the structured record so the patient does not retell their story</td>
+          </tr>
+          <tr>
+            <td><strong>Dashboard</strong></td>
+            <td>Clinic manager</td>
+            <td>Per-channel funnel, drop-off by transition, risk mix, time-to-value. Every figure is an aggregate over rows</td>
+          </tr>
+          <tr>
+            <td><strong>Escalation payload</strong></td>
+            <td>Machine-to-clinician</td>
+            <td>Triage summary, profile snapshot, history state, provenance and acquisition context — assembled deterministically, not generated</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>The ordering is the product</h3>
+    <p>
+      The queue sorts <span class="chip high">high</span>
+      <span class="chip med">medium</span> <span class="chip low">low</span> by
+      clinical risk. It would be trivial to sort by predicted commercial value
+      instead, and it would make a better sales tool and a worse clinical one — a
+      real emergency sitting at position 31 behind thirty price enquiries. Nothing
+      in the analytics layer is permitted to touch that ordering.
+    </p>
+  </section>
+
+  <section>
+    <p class="eyebrow">Machine learning</p>
+    <h2>Where the FYP methodology went</h2>
+    <p class="lede">
+      Two distinct layers, and neither of them is the language model. The LLM is a
+      component the system constrains; the machine learning is what measures and
+      predicts around it.
+    </p>
+
+    <h3>Layer one — evaluation as measurement, not vibes</h3>
+    <p>
+      The safety gate is treated as a classifier and evaluated like one. Wilson
+      confidence intervals on every rate, subgroup breakdowns, and the
+      <strong>four-fifths rule</strong> — the disparate-impact test from
+      employment law — applied to a safety property rather than a hiring decision.
+    </p>
+    <p>
+      This found something real. Emergency detection worked in English and Malay
+      but degraded badly in Indonesian, giving an adverse-impact ratio of
+      <strong>0.768</strong> — well below the 0.8 threshold. The cause was a single
+      orthographic difference: Malay <code>sesak nafas</code> against Indonesian
+      <code>sesak napas</code>. An Indonesian speaker describing breathlessness
+      was less likely to be escalated than a Malay speaker describing the same
+      emergency.
+    </p>
+
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr><th>Audit</th><th class="num">Before</th><th class="num">After</th><th>Verdict</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Indonesian adverse-impact ratio</td>
+            <td class="num">0.768</td>
+            <td class="num">0.962</td>
+            <td><span class="chip low">Pass</span></td>
+          </tr>
+          <tr>
+            <td>False alarms on admin questions</td>
+            <td class="num">4 / 15</td>
+            <td class="num">0 / 15</td>
+            <td><span class="chip low">Pass</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>
+      The second row came from the same audit. Words like <code>clinic</code>,
+      <code>doctor</code> and <code>hospital</code> were treated as clinical
+      signal, so &ldquo;what are your opening hours&rdquo; triggered a fail-closed
+      floor. Removing them cost nothing and stopped the system crying wolf at
+      people asking about parking.
+    </p>
+
+    <h3>Layer two — abandonment prediction</h3>
+    <p>
+      This is the FYP churn methodology pointed at a different outcome. Churn asks
+      <em class="term">will this customer leave?</em> This asks <em class="term">will
+      this person give up before reaching a clinician?</em> — structurally
+      identical, and the class imbalance, leakage traps and fairness questions all
+      carry over.
+    </p>
+
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr><th>Model</th><th class="num">ROC-AUC</th><th class="num">PR-AUC</th><th class="num">Brier</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Logistic regression <span style="color:var(--muted)">(baseline)</span></td><td class="num">0.598</td><td class="num">0.810</td><td class="num">0.228</td></tr>
+          <tr><td><strong>Gradient boosting</strong> <span style="color:var(--muted)">(selected)</span></td><td class="num">0.721</td><td class="num">0.872</td><td class="num">0.189</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>
+      Three methodological choices are doing the work here, and each corresponds
+      to a way this kind of model usually goes wrong.
+    </p>
+    <ul class="plain">
+      <li><strong>Leakage is named, not merely avoided.</strong> Message count and
+      history completeness are excluded and listed explicitly in the code. Including
+      them would produce a beautiful AUC and a useless model, because long
+      conversations are the ones that converted.</li>
+      <li><strong>PR-AUC is the headline, not ROC-AUC.</strong> With an imbalanced
+      label, ROC-AUC flatters. Brier score is reported too, because the output is
+      meant to be read as a probability by a person rather than thresholded by a
+      machine.</li>
+      <li><strong>The model audits itself for fairness.</strong> It runs the same
+      four-fifths test on its own per-channel error rates — and when it returned
+      0.639 from a group of 16, it labelled the result
+      <span class="chip med">underpowered</span> rather than reporting a disparity
+      that noise alone could produce.</li>
+    </ul>
+
+    <div class="note">
+      <span class="label">The constraint that defines its use</span>
+      <p>
+        This model finds <strong>steps that lose people</strong>, so the product can
+        be fixed. It does not rank patients, and its output must never influence the
+        order of the triage queue. A model saying &ldquo;social-comment arrivals at
+        2am abandon at 80%&rdquo; is an instruction to improve the after-hours
+        message — not a licence to deprioritise those people.
+      </p>
+    </div>
+
+    <div class="note">
+      <span class="label">What the numbers above are worth</span>
+      <p>
+        92% of that training data is synthetic, generated with distributions that
+        were chosen rather than measured. Those figures validate that the pipeline
+        runs end to end; they are not evidence about real patients. Every synthetic
+        row is tagged, the API reports how many rows sit behind each number, and the
+        dashboard states it above the figures rather than in a footnote.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">Engineering posture</p>
+    <h2>Three rules that shaped the code</h2>
+    <div class="grid two">
+      <div class="card">
+        <h3>Fail closed, but scoped</h3>
+        <p>
+          When the classifier fails, risk floors at medium — but only for messages
+          carrying clinical signal. An early version floored <em class="term">every</em>
+          message at medium, which would have buried real emergencies in a queue of
+          people asking about parking.
+        </p>
+      </div>
+      <div class="card">
+        <h3>Never overwrite</h3>
+        <p>
+          Facts supersede rather than replace. A patient contact is a row, not a
+          column, so an email can change without breaking history. A clinician's
+          reply is a new record, never an edit to the escalation.
+        </p>
+      </div>
+      <div class="card">
+        <h3>Honest failure beats quiet success</h3>
+        <p>
+          Every failure path in the product was honest; the success path was the one
+          that lied. &ldquo;Sent to the clinical team&rdquo; printed unconditionally
+          while nothing was being stored. It now requires proof of the write, and a
+          schema bug that made guest escalations impossible was found because of it.
+        </p>
+      </div>
+      <div class="card">
+        <h3>Prove it over HTTP</h3>
+        <p>
+          The tests run against the real running server, not mocks. What matters is
+          what leaves the process, not what a helper returns — and only a real
+          request against real RLS can prove Patient A cannot read Patient B.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">Limitations</p>
+    <h2>What this is not</h2>
+    <ul class="plain">
+      <li><strong>Synthetic throughout.</strong> No real clinic, no real doctors, no
+      real patients. The clinic corpus, the traffic and the training data are all
+      generated.</li>
+      <li><strong>One shared admin password.</strong> Appropriate for a single
+      operator, wrong for a clinic: no per-person identity, so nothing attributes to
+      a human in the audit log, and revoking one person means changing it for
+      everybody. Supabase Auth with <code>is_care_team()</code> is the real answer,
+      and the schema already assumes it.</li>
+      <li><strong>The abandonment model is untrained on reality.</strong> It is
+      labelled as such everywhere it appears, and must be re-run before any figure
+      from it is quoted.</li>
+      <li><strong>Not a medical device.</strong> It is non-diagnostic by
+      construction, and the escalation path assumes a human clinician is on the
+      other end.</li>
+    </ul>
+  </section>
+
+  <footer>
+    Nightingale · Synthetic data only · Not a medical device
+  </footer>
+
+</div>
+</body>
+</html>
